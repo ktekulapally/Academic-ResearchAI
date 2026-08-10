@@ -47,7 +47,7 @@ def embed(text: str) -> list[float]:
         try:
             result = genai.embed_content(
                 model="models/text-embedding-004",
-                contents=text,
+                content=text,
                 task_type="retrieval_document"
             )
             return result["embedding"]
