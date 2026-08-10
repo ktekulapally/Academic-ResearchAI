@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: academic-research-ai-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-academic_research}
+      POSTGRES_USER: ${POSTGRES_USER:-academic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-academic}
+    ports: ["5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U academic -d academic_research"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: academic-research-ai-redis
+    ports: ["6379:6379"]
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: academic-research-ai-qdrant
+    ports: ["6333:6333", "6334:6334"]
+    volumes: [qdrant_data:/qdrant/storage]
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: academic-research-ai-ollama
+    ports: ["11434:11434"]
+    volumes: [ollama_data:/root/.ollama]
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: academic-research-ai-searxng
+    ports: ["8080:8080"]
+    volumes: [./infra/searxng:/etc/searxng:rw]
+
+  grobid:
+    image: lfoppiano/grobid:0.8.2
+    container_name: academic-research-ai-grobid
+    ports: ["8070:8070"]
+
+  minio:
+    image: minio/minio:latest
+    container_name: academic-research-ai-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio_data:/data]
+
+  api:
+    build:
+      context: ./backend
+    container_name: academic-research-ai-api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://academic:academic@postgres:5432/academic_research}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
+      OPENALEX_URL: ${OPENALEX_URL:-https://api.openalex.org}
+      CROSSREF_URL: ${CROSSREF_URL:-https://api.crossref.org}
+      GROBID_URL: ${GROBID_URL:-http://grobid:8070}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-academic-documents}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+    ports: ["8000:8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+      searxng:
+        condition: service_started
+      grobid:
+        condition: service_started
+      minio:
+        condition: service_started
+    volumes: [./backend:/app]
+
+  n8n:
+    image: n8nio/n8n:latest
+    profiles: ["integration"]
+    ports: ["5678:5678"]
+    volumes: [n8n_data:/home/node/.n8n]
+
+  flowise:
+    image: flowiseai/flowise:latest
+    profiles: ["integration"]
+    ports: ["3000:3000"]
+    volumes: [flowise_data:/root/.flowise]
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  ollama_data:
+  minio_data:
+  n8n_data:
+  flowise_data:
