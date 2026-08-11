@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 # Load environment variables by resolving the path of the .env file in the workspace root
 base_dir = Path(__file__).resolve().parent.parent.parent
 env_path = base_dir / ".env"
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, override=True)
+
 
 
 @dataclass(frozen=True)
