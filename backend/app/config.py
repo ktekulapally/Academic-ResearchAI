@@ -1,9 +1,13 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables by resolving the path of the .env file in the workspace root
+base_dir = Path(__file__).resolve().parent.parent.parent
+env_path = base_dir / ".env"
+load_dotenv(dotenv_path=env_path)
+
 
 @dataclass(frozen=True)
 class Settings:
