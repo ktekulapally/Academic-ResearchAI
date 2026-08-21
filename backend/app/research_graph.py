@@ -142,9 +142,8 @@ def acquire_evidence(s: ResearchState):
 
             try:
                 vector = embed(chunk)
-                point_id = hashlib.sha1(
-                    f"{s['run_id']}:{document.id}:{idx}".encode()
-                ).hexdigest()
+                import uuid
+                point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{s['run_id']}:{document.id}:{idx}"))
                 try:
                     qdrant.get_collection(COLLECTION)
                 except Exception:
@@ -373,7 +372,12 @@ def run_exam_research(run_id: int, subject_id: int):
         # If live download yielded nothing, let's look in papers_repository for pre-existing papers to process
         existing_files = []
         if os.path.exists(settings.papers_repo_dir):
-            existing_files = [f for f in os.listdir(settings.papers_repo_dir) if f.lower().endswith(".pdf")]
+            sub_clean = subject_name.lower().replace(' ', '_')
+            existing_files = [
+                f for f in os.listdir(settings.papers_repo_dir) 
+                if f.lower().endswith(".pdf") and sub_clean in f.lower()
+            ]
+
 
         if not pdf_urls and existing_files:
             logger.log(f"No online URLs found. Falling back to {len(existing_files)} existing papers in repository directory.")
@@ -456,7 +460,13 @@ def run_exam_research(run_id: int, subject_id: int):
 
         # 5. Extract Questions & Clustering
         logger.log("Parsing papers and extracting questions...")
-        qdrant = QdrantClient(url=settings.qdrant_url)
+        try:
+            qdrant = QdrantClient(url=settings.qdrant_url, timeout=3.0)
+            qdrant.get_collections()
+        except Exception:
+            logger.log("Qdrant local connection failed. Falling back to in-memory Qdrant database.")
+            qdrant = QdrantClient(":memory:")
+
         
         # Ensure collection
         try:
@@ -526,16 +536,22 @@ def run_exam_research(run_id: int, subject_id: int):
                         vector = embed(raw_text)
                         
                         # Find matches
-                        search_results = qdrant.search(
+                        from qdrant_client.models import Filter, FieldCondition, MatchValue
+                        response = qdrant.query_points(
                             collection_name=EXAM_COLLECTION,
-                            query_vector=vector,
+                            query=vector,
                             limit=1,
-                            query_filter={
-                                "must": [
-                                    {"key": "subject_id", "match": {"value": subject_id}}
+                            query_filter=Filter(
+                                must=[
+                                    FieldCondition(
+                                        key="subject_id",
+                                        match=MatchValue(value=subject_id)
+                                    )
                                 ]
-                            }
+                            )
                         )
+                        search_results = response.points
+
                         
                         cluster_id = None
                         similarity = 1.0
@@ -578,7 +594,9 @@ def run_exam_research(run_id: int, subject_id: int):
                         db.commit()
                         
                         # Insert to Qdrant index
-                        point_id = hashlib.sha1(f"ext_q_{eq.id}".encode()).hexdigest()
+                        import uuid
+                        point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"ext_q_{eq.id}"))
+
                         qdrant.upsert(
                             collection_name=EXAM_COLLECTION,
                             points=[PointStruct(
@@ -788,9 +806,8 @@ def acquire_evidence(s: ResearchState):
 
             try:
                 vector = embed(chunk)
-                point_id = hashlib.sha1(
-                    f"{s['run_id']}:{document.id}:{idx}".encode()
-                ).hexdigest()
+                import uuid
+                point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{s['run_id']}:{document.id}:{idx}"))
                 try:
                     qdrant.get_collection(COLLECTION)
                 except Exception:
