@@ -27,5 +27,6 @@ flutter_proc = subprocess.Popen(
     cwd=str(frontend_dir),
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
+    shell=True,
     creationflags=0x08000000 # CREATE_NO_WINDOW
 )
