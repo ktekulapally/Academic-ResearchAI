@@ -449,13 +449,13 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(20),
-              border: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.4)),
+              border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.4)),
             ),
             child: Row(
               children: [
                 const Icon(Icons.person_outline, size: 16, color: Color(0xFF8B5CF6)),
                 const SizedBox(width: 6),
-                Text(studentName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w640)),
+                Text(studentName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -507,7 +507,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       decoration: BoxDecoration(
         color: const Color(0xFF131B2E),
         borderRadius: BorderRadius.circular(16),
-        border: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
+        border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF8B5CF6).withOpacity(0.15),
@@ -652,7 +652,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       decoration: BoxDecoration(
         color: const Color(0xFF131B2E),
         borderRadius: BorderRadius.circular(16),
-        border: BorderSide(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFF1E293B)),
       ),
       child: Row(
         children: [
@@ -710,7 +710,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       decoration: BoxDecoration(
         color: const Color(0xFF1E1B4B),
         borderRadius: BorderRadius.circular(16),
-        border: BorderSide(color: const Color(0xFF8B5CF6)),
+        border: Border.all(color: const Color(0xFF8B5CF6)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -833,7 +833,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
                 decoration: BoxDecoration(
                   color: const Color(0xFFF59E0B).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(10),
-                  border: BorderSide(color: const Color(0xFFF59E0B)),
+                  border: Border.all(color: const Color(0xFFF59E0B)),
                 ),
                 child: Text('🔥 Repeated ${freq}x', style: const TextStyle(fontSize: 11, color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
               ),
