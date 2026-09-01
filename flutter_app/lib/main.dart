@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 // ========== CONFIGURATION ==========
-// Replace with your live Supabase Project URL & Anon Key
-const String kDefaultApiBase = 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co/functions/v1';
+const String kDefaultApiBase = 'https://rzgwoubtuyrpmwsezhqw.supabase.co/functions/v1';
 const String kDefaultAnonKey = 'YOUR_SUPABASE_ANON_KEY';
 
 void main() {
