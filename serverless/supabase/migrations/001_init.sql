@@ -1,4 +1,4 @@
--- Exam Focus AI — Complete Serverless Supabase Schema
+-- Exam Focus AI — Complete Serverless Supabase Schema (Pure Standard SQL)
 -- Run in Supabase SQL Editor (or via supabase db push)
 
 -- Extensions
@@ -88,7 +88,7 @@ create table if not exists source_papers (
 create index if not exists source_papers_subject_year_idx 
   on source_papers(subject_id, year desc);
 
--- ========== 6. COMPREHENSIVE SEED DATA ==========
+-- ========== 6. SEED DATA (PURE STANDARD SQL) ==========
 
 -- Standards
 insert into academic_standards (name, level_order) values
@@ -99,115 +99,202 @@ insert into academic_standards (name, level_order) values
   ('TS Inter 2nd Year (Senior)', 22)
 on conflict (name) do nothing;
 
--- Populate Streams & Subjects
-do $$
-declare
-  s10 bigint; s11 bigint; s12 bigint; ts1 bigint; ts2 bigint;
-  sid bigint;
-begin
-  select id into s10 from academic_standards where name = 'CBSE Class 10';
-  select id into s11 from academic_standards where name = 'CBSE Class 11';
-  select id into s12 from academic_standards where name = 'CBSE Class 12';
-  select id into ts1 from academic_standards where name = 'TS Inter 1st Year (Junior)';
-  select id into ts2 from academic_standards where name = 'TS Inter 2nd Year (Senior)';
+-- Streams for CBSE 10
+insert into streams (standard_id, name)
+select id, 'General' from academic_standards where name = 'CBSE Class 10'
+on conflict (standard_id, name) do nothing;
 
-  -- 1. CBSE 10
-  insert into streams (standard_id, name) values (s10, 'General') on conflict (standard_id, name) do nothing;
-  select id into sid from streams where standard_id = s10 and name = 'General';
-  insert into subjects (stream_id, name) values
-    (sid, 'Mathematics (Standard)'), (sid, 'Mathematics (Basic)'), (sid, 'Science'), 
-    (sid, 'Social Science'), (sid, 'English Language & Lit'), (sid, 'Hindi Course A')
-  on conflict (stream_id, name) do nothing;
+-- Streams for CBSE 11 & 12
+insert into streams (standard_id, name)
+select a.id, t.stream_name 
+from academic_standards a,
+(values ('Science (PCM/PCB)'), ('Commerce'), ('Humanities / Arts')) as t(stream_name)
+where a.name in ('CBSE Class 11', 'CBSE Class 12')
+on conflict (standard_id, name) do nothing;
 
-  -- 2. CBSE 11
-  insert into streams (standard_id, name) values
-    (s11, 'Science (PCM/PCB)'), (s11, 'Commerce'), (s11, 'Humanities / Arts')
-  on conflict (standard_id, name) do nothing;
+-- Streams for TS Inter 1st & 2nd Year
+insert into streams (standard_id, name)
+select a.id, t.stream_name 
+from academic_standards a,
+(values ('MPC'), ('BiPC'), ('CEC'), ('MEC')) as t(stream_name)
+where a.name in ('TS Inter 1st Year (Junior)', 'TS Inter 2nd Year (Senior)')
+on conflict (standard_id, name) do nothing;
 
-  select id into sid from streams where standard_id = s11 and name = 'Science (PCM/PCB)';
-  insert into subjects (stream_id, name) values
-    (sid, 'Physics'), (sid, 'Chemistry'), (sid, 'Mathematics'), (sid, 'Biology'), (sid, 'Computer Science (Python)'), (sid, 'English Core')
-  on conflict (stream_id, name) do nothing;
+-- Subjects: CBSE 10
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values 
+  ('Mathematics (Standard)'), 
+  ('Mathematics (Basic)'), 
+  ('Science'), 
+  ('Social Science'), 
+  ('English Language & Lit'), 
+  ('Hindi Course A')
+) as t(sub_name)
+where a.name = 'CBSE Class 10' and s.name = 'General'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = s11 and name = 'Commerce';
-  insert into subjects (stream_id, name) values
-    (sid, 'Accountancy'), (sid, 'Business Studies'), (sid, 'Economics'), (sid, 'Applied Mathematics'), (sid, 'English Core')
-  on conflict (stream_id, name) do nothing;
+-- Subjects: CBSE 11 Science
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values 
+  ('Physics'), 
+  ('Chemistry'), 
+  ('Mathematics'), 
+  ('Biology'), 
+  ('Computer Science (Python)'), 
+  ('English Core')
+) as t(sub_name)
+where a.name = 'CBSE Class 11' and s.name = 'Science (PCM/PCB)'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = s11 and name = 'Humanities / Arts';
-  insert into subjects (stream_id, name) values
-    (sid, 'History'), (sid, 'Political Science'), (sid, 'Geography'), (sid, 'Psychology'), (sid, 'Economics')
-  on conflict (stream_id, name) do nothing;
+-- Subjects: CBSE 11 Commerce
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values 
+  ('Accountancy'), 
+  ('Business Studies'), 
+  ('Economics'), 
+  ('Applied Mathematics'), 
+  ('English Core')
+) as t(sub_name)
+where a.name = 'CBSE Class 11' and s.name = 'Commerce'
+on conflict (stream_id, name) do nothing;
 
-  -- 3. CBSE 12
-  insert into streams (standard_id, name) values
-    (s12, 'Science (PCM/PCB)'), (s12, 'Commerce'), (s12, 'Humanities / Arts')
-  on conflict (standard_id, name) do nothing;
+-- Subjects: CBSE 11 Humanities
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values 
+  ('History'), 
+  ('Political Science'), 
+  ('Geography'), 
+  ('Psychology'), 
+  ('Economics')
+) as t(sub_name)
+where a.name = 'CBSE Class 11' and s.name = 'Humanities / Arts'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = s12 and name = 'Science (PCM/PCB)';
-  insert into subjects (stream_id, name) values
-    (sid, 'Physics'), (sid, 'Chemistry'), (sid, 'Mathematics'), (sid, 'Biology'), (sid, 'Computer Science (Python)'), (sid, 'English Core')
-  on conflict (stream_id, name) do nothing;
+-- Subjects: CBSE 12 Science
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values 
+  ('Physics'), 
+  ('Chemistry'), 
+  ('Mathematics'), 
+  ('Biology'), 
+  ('Computer Science (Python)'), 
+  ('English Core')
+) as t(sub_name)
+where a.name = 'CBSE Class 12' and s.name = 'Science (PCM/PCB)'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = s12 and name = 'Commerce';
-  insert into subjects (stream_id, name) values
-    (sid, 'Accountancy'), (sid, 'Business Studies'), (sid, 'Economics'), (sid, 'Applied Mathematics'), (sid, 'English Core')
-  on conflict (stream_id, name) do nothing;
+-- Subjects: CBSE 12 Commerce
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values 
+  ('Accountancy'), 
+  ('Business Studies'), 
+  ('Economics'), 
+  ('Applied Mathematics'), 
+  ('English Core')
+) as t(sub_name)
+where a.name = 'CBSE Class 12' and s.name = 'Commerce'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = s12 and name = 'Humanities / Arts';
-  insert into subjects (stream_id, name) values
-    (sid, 'History'), (sid, 'Political Science'), (sid, 'Geography'), (sid, 'Psychology'), (sid, 'Economics')
-  on conflict (stream_id, name) do nothing;
+-- Subjects: CBSE 12 Humanities
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values 
+  ('History'), 
+  ('Political Science'), 
+  ('Geography'), 
+  ('Psychology'), 
+  ('Economics')
+) as t(sub_name)
+where a.name = 'CBSE Class 12' and s.name = 'Humanities / Arts'
+on conflict (stream_id, name) do nothing;
 
-  -- 4. TS Inter 1st Year
-  insert into streams (standard_id, name) values
-    (ts1, 'MPC'), (ts1, 'BiPC'), (ts1, 'CEC'), (ts1, 'MEC')
-  on conflict (standard_id, name) do nothing;
+-- Subjects: TS Inter 1st Year (MPC, BiPC, CEC)
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values ('Mathematics 1A'), ('Mathematics 1B'), ('Physics 1'), ('Chemistry 1'), ('English 1')) as t(sub_name)
+where a.name = 'TS Inter 1st Year (Junior)' and s.name = 'MPC'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = ts1 and name = 'MPC';
-  insert into subjects (stream_id, name) values
-    (sid, 'Mathematics 1A'), (sid, 'Mathematics 1B'), (sid, 'Physics 1'), (sid, 'Chemistry 1'), (sid, 'English 1')
-  on conflict (stream_id, name) do nothing;
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values ('Botany 1'), ('Zoology 1'), ('Physics 1'), ('Chemistry 1'), ('English 1')) as t(sub_name)
+where a.name = 'TS Inter 1st Year (Junior)' and s.name = 'BiPC'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = ts1 and name = 'BiPC';
-  insert into subjects (stream_id, name) values
-    (sid, 'Botany 1'), (sid, 'Zoology 1'), (sid, 'Physics 1'), (sid, 'Chemistry 1'), (sid, 'English 1')
-  on conflict (stream_id, name) do nothing;
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values ('Commerce 1'), ('Economics 1'), ('Civics 1'), ('English 1')) as t(sub_name)
+where a.name = 'TS Inter 1st Year (Junior)' and s.name = 'CEC'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = ts1 and name = 'CEC';
-  insert into subjects (stream_id, name) values
-    (sid, 'Commerce 1'), (sid, 'Economics 1'), (sid, 'Civics 1'), (sid, 'English 1')
-  on conflict (stream_id, name) do nothing;
+-- Subjects: TS Inter 2nd Year (MPC, BiPC, CEC)
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values ('Mathematics 2A'), ('Mathematics 2B'), ('Physics 2'), ('Chemistry 2'), ('English 2')) as t(sub_name)
+where a.name = 'TS Inter 2nd Year (Senior)' and s.name = 'MPC'
+on conflict (stream_id, name) do nothing;
 
-  -- 5. TS Inter 2nd Year
-  insert into streams (standard_id, name) values
-    (ts2, 'MPC'), (ts2, 'BiPC'), (ts2, 'CEC'), (ts2, 'MEC')
-  on conflict (standard_id, name) do nothing;
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values ('Botany 2'), ('Zoology 2'), ('Physics 2'), ('Chemistry 2'), ('English 2')) as t(sub_name)
+where a.name = 'TS Inter 2nd Year (Senior)' and s.name = 'BiPC'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = ts2 and name = 'MPC';
-  insert into subjects (stream_id, name) values
-    (sid, 'Mathematics 2A'), (sid, 'Mathematics 2B'), (sid, 'Physics 2'), (sid, 'Chemistry 2'), (sid, 'English 2')
-  on conflict (stream_id, name) do nothing;
+insert into subjects (stream_id, name)
+select s.id, t.sub_name 
+from streams s 
+join academic_standards a on s.standard_id = a.id,
+(values ('Commerce 2'), ('Economics 2'), ('Civics 2'), ('English 2')) as t(sub_name)
+where a.name = 'TS Inter 2nd Year (Senior)' and s.name = 'CEC'
+on conflict (stream_id, name) do nothing;
 
-  select id into sid from streams where standard_id = ts2 and name = 'BiPC';
-  insert into subjects (stream_id, name) values
-    (sid, 'Botany 2'), (sid, 'Zoology 2'), (sid, 'Physics 2'), (sid, 'Chemistry 2'), (sid, 'English 2')
-  on conflict (stream_id, name) do nothing;
-
-  select id into sid from streams where standard_id = ts2 and name = 'CEC';
-  insert into subjects (stream_id, name) values
-    (sid, 'Commerce 2'), (sid, 'Economics 2'), (sid, 'Civics 2'), (sid, 'English 2')
-  on conflict (stream_id, name) do nothing;
-
-end $$;
-
--- Enable Row Level Security (RLS) & Public read policies
+-- ========== 7. RLS POLICIES ==========
 alter table academic_standards enable row level security;
 alter table streams enable row level security;
 alter table subjects enable row level security;
 alter table question_clusters enable row level security;
 alter table source_papers enable row level security;
 alter table research_jobs enable row level security;
+
+-- Drop existing policies if they already exist to avoid errors on rerun
+drop policy if exists "Public read standards" on academic_standards;
+drop policy if exists "Public read streams" on streams;
+drop policy if exists "Public read subjects" on subjects;
+drop policy if exists "Public read clusters" on question_clusters;
+drop policy if exists "Public read source papers" on source_papers;
+drop policy if exists "Public read research jobs" on research_jobs;
+drop policy if exists "Public insert research jobs" on research_jobs;
+drop policy if exists "Public update research jobs" on research_jobs;
 
 create policy "Public read standards" on academic_standards for select using (true);
 create policy "Public read streams" on streams for select using (true);
