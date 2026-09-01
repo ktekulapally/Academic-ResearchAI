@@ -2,7 +2,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-void main() => runApp(const AcademicResearchApp());
+// ========== CONFIGURATION ==========
+// Replace with your live Supabase Project URL & Anon Key
+const String kDefaultApiBase = 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co/functions/v1';
+const String kDefaultAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+
+void main() {
+  runApp(const AcademicResearchApp());
+}
 
 class AcademicResearchApp extends StatelessWidget {
   const AcademicResearchApp({super.key});
@@ -10,1105 +17,722 @@ class AcademicResearchApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Academic Research AI',
+      title: 'Exam Focus AI — Edu Research',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4F46E5), // Premium Indigo
-          primary: const Color(0xFF4F46E5),
-          background: const Color(0xFFF8FAFC), // Slate 50
-          surface: Colors.white,
-          onBackground: const Color(0xFF0F172A), // Slate 900
-          onSurface: const Color(0xFF0F172A),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0B0F19),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF8B5CF6), // Neon Violet
+          secondary: Color(0xFF06B6D4), // Cyan
+          surface: Color(0xFF131B2E),
+          surfaceContainerHighest: Color(0xFF1E293B),
         ),
-        cardTheme: const CardTheme(
-          color: Colors.white,
+        cardTheme: CardThemeData(
+          color: const Color(0xFF131B2E),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            side: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFF1E293B), width: 1),
           ),
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFF1F5F9), // Slate 100
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2),
-          ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0B0F19),
+          elevation: 0,
         ),
       ),
-      home: const MainGate(),
+      home: const StudentHomeScreen(),
     );
   }
 }
 
-class MainGate extends StatefulWidget {
-  const MainGate({super.key});
+// ========== MAIN STUDENT HOME SCREEN ==========
+class StudentHomeScreen extends StatefulWidget {
+  const StudentHomeScreen({super.key});
 
   @override
-  State<MainGate> createState() => _MainGateState();
+  State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }
 
-class _MainGateState extends State<MainGate> {
-  String? authToken;
-  String? userName;
-  String currentView = 'login'; // login, register, selection, workspace
-  
-  // Selections
-  int? selectedStandardId;
-  String? selectedStandardName;
-  int? selectedStreamId;
-  String? selectedStreamName;
-  int? selectedSubjectId;
-  String? selectedSubjectName;
+class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTickerProviderStateMixin {
+  String apiBase = kDefaultApiBase;
+  String anonKey = kDefaultAnonKey;
 
-  void onLoginSuccess(String token, String name) {
-    setState(() {
-      authToken = token;
-      userName = name;
-      currentView = 'selection';
-    });
-  }
+  bool isGuest = true;
+  String studentName = "Guest Student";
 
-  void onLogout() {
-    setState(() {
-      authToken = null;
-      userName = null;
-      currentView = 'login';
-      selectedStandardId = null;
-      selectedStreamId = null;
-      selectedSubjectId = null;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    switch (currentView) {
-      case 'login':
-        return LoginScreen(
-          onLoginSuccess: onLoginSuccess,
-          onSwitchToRegister: () => setState(() => currentView = 'register'),
-        );
-      case 'register':
-        return RegisterScreen(
-          onRegisterSuccess: () => setState(() => currentView = 'login'),
-          onSwitchToLogin: () => setState(() => currentView = 'login'),
-        );
-      case 'selection':
-        return SelectionScreen(
-          authToken: authToken,
-          userName: userName,
-          onLogout: onLogout,
-          onSubjectSelected: (stdId, stdName, strmId, strmName, subId, subName) {
-            setState(() {
-              selectedStandardId = stdId;
-              selectedStandardName = stdName;
-              selectedStreamId = strmId;
-              selectedStreamName = strmName;
-              selectedSubjectId = subId;
-              selectedSubjectName = subName;
-              currentView = 'workspace';
-            });
-          },
-        );
-      case 'workspace':
-        return WorkspaceScreen(
-          authToken: authToken,
-          userName: userName,
-          standardId: selectedStandardId!,
-          standardName: selectedStandardName!,
-          streamId: selectedStreamId!,
-          streamName: selectedStreamName!,
-          subjectId: selectedSubjectId!,
-          subjectName: selectedSubjectName!,
-          onBack: () => setState(() => currentView = 'selection'),
-          onLogout: onLogout,
-        );
-      default:
-        return const Scaffold(body: Center(child: Text('Unknown State')));
-    }
-  }
-}
-
-// --- REGISTER SCREEN ---
-class RegisterScreen extends StatefulWidget {
-  final VoidCallback onRegisterSuccess;
-  final VoidCallback onSwitchToLogin;
-
-  const RegisterScreen({
-    super.key,
-    required this.onRegisterSuccess,
-    required this.onSwitchToLogin,
-  });
-
-  @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
-}
-
-class _RegisterScreenState extends State<RegisterScreen> {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-  final nameController = TextEditingController();
-  String errorMessage = '';
-  bool isLoading = false;
-
-  Future<void> register() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = '';
-    });
-    try {
-      final res = await http.post(
-        Uri.parse('http://localhost:8000/api/v1/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': emailController.text,
-          'password': passwordController.text,
-          'name': nameController.text,
-        }),
-      );
-      if (res.statusCode == 200) {
-        widget.onRegisterSuccess();
-      } else {
-        final body = jsonDecode(res.body);
-        setState(() => errorMessage = body['detail'] ?? 'Registration failed.');
-      }
-    } catch (e) {
-      setState(() => errorMessage = 'Connection error. Make sure API is running.');
-    } finally {
-      setState(() => isLoading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 450),
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Create Account',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Academic Research AI',
-                    style: TextStyle(fontSize: 16, color: Color(0xFF64748B)),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  if (errorMessage.isNotEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
-                      ),
-                      child: Text(
-                        errorMessage,
-                        style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 14),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Name', prefixIcon: Icon(Icons.person_outline)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: emailController,
-                    decoration: const InputDecoration(labelText: 'Email Address', prefixIcon: Icon(Icons.email_outlined)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: isLoading ? null : register,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Sign Up', style: TextStyle(fontSize: 16)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: widget.onSwitchToLogin,
-                    child: const Text('Already have an account? Log In'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- LOGIN SCREEN ---
-class LoginScreen extends StatefulWidget {
-  final Function(String, String) onLoginSuccess;
-  final VoidCallback onSwitchToRegister;
-
-  const LoginScreen({
-    super.key,
-    required this.onLoginSuccess,
-    required this.onSwitchToRegister,
-  });
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-  String errorMessage = '';
-  bool isLoading = false;
-
-  Future<void> login() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = '';
-    });
-    try {
-      final res = await http.post(
-        Uri.parse('http://localhost:8000/api/v1/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': emailController.text,
-          'password': passwordController.text,
-        }),
-      );
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body);
-        widget.onLoginSuccess(body['access_token'], body['name'] ?? 'Student');
-      } else {
-        final body = jsonDecode(res.body);
-        setState(() => errorMessage = body['detail'] ?? 'Invalid credentials.');
-      }
-    } catch (e) {
-      setState(() => errorMessage = 'Connection error. Make sure API is running.');
-    } finally {
-      setState(() => isLoading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 450),
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Student Login',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Academic Research AI Portal',
-                    style: TextStyle(fontSize: 16, color: Color(0xFF64748B)),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  if (errorMessage.isNotEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
-                      ),
-                      child: Text(
-                        errorMessage,
-                        style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 14),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  TextField(
-                    controller: emailController,
-                    decoration: const InputDecoration(labelText: 'Email Address', prefixIcon: Icon(Icons.email_outlined)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: isLoading ? null : login,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Log In', style: TextStyle(fontSize: 16)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: widget.onSwitchToRegister,
-                    child: const Text('Don\'t have an account? Sign Up'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- SELECTION SCREEN ---
-class SelectionScreen extends StatefulWidget {
-  final String? authToken;
-  final String? userName;
-  final VoidCallback onLogout;
-  final Function(int, String, int, String, int, String) onSubjectSelected;
-
-  const SelectionScreen({
-    super.key,
-    required this.authToken,
-    required this.userName,
-    required this.onLogout,
-    required this.onSubjectSelected,
-  });
-
-  @override
-  State<SelectionScreen> createState() => _SelectionScreenState();
-}
-
-class _SelectionScreenState extends State<SelectionScreen> {
+  // Taxonomy State
   List<dynamic> standards = [];
   List<dynamic> streams = [];
   List<dynamic> subjects = [];
 
-  int? selectedStandard;
-  int? selectedStream;
-  int? selectedSubject;
+  int? selectedStandardId;
+  int? selectedStreamId;
+  int? selectedSubjectId;
+  String? selectedSubjectName;
 
-  @override
-  void initState() {
-    super.initState();
-    fetchStandards();
-  }
+  // Search & Filter State
+  int selectedYears = 10; // 5, 7, 10
+  final TextEditingController _queryController = TextEditingController();
+  bool isSearchingNLP = false;
 
-  Future<void> fetchStandards() async {
-    try {
-      final res = await http.get(Uri.parse('http://localhost:8000/api/v1/standards'));
-      setState(() => standards = jsonDecode(res.body));
-    } catch (_) {}
-  }
-
-  Future<void> fetchStreams(int stdId) async {
-    try {
-      final res = await http.get(Uri.parse('http://localhost:8000/api/v1/standards/$stdId/streams'));
-      setState(() {
-        streams = jsonDecode(res.body);
-        subjects = [];
-        selectedStream = null;
-        selectedSubject = null;
-      });
-    } catch (_) {}
-  }
-
-  Future<void> fetchSubjects(int strmId) async {
-    try {
-      final res = await http.get(Uri.parse('http://localhost:8000/api/v1/streams/$strmId/subjects'));
-      setState(() {
-        subjects = jsonDecode(res.body);
-        selectedSubject = null;
-      });
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text('Academic Research AI'),
-        actions: [
-          Center(
-            child: Text(
-              'Hi, ${widget.userName ?? "Student"}',
-              style: const TextStyle(fontWeight: FontWeight.w640),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_outlined),
-            onPressed: widget.onLogout,
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(Icons.school_outlined, size: 72, color: Color(0xFF4F46E5)),
-                const SizedBox(height: 24),
-                const Text(
-                  'Academic Taxonomy Selector',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Select your standard, stream, and subject to begin deep exam analysis.',
-                  style: TextStyle(color: Color(0xFF64748B)),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                
-                // Standards Dropdown
-                DropdownButtonFormField<int>(
-                  value: selectedStandard,
-                  hint: const Text('Select Academic Standard'),
-                  items: standards.map<DropdownMenuItem<int>>((s) {
-                    return DropdownMenuItem<int>(
-                      value: s['id'],
-                      child: Text(s['name']),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      selectedStandard = val;
-                      selectedStream = null;
-                      selectedSubject = null;
-                    });
-                    if (val != null) fetchStreams(val);
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Streams Dropdown
-                DropdownButtonFormField<int>(
-                  value: selectedStream,
-                  hint: const Text('Select Stream'),
-                  items: streams.map<DropdownMenuItem<int>>((s) {
-                    return DropdownMenuItem<int>(
-                      value: s['id'],
-                      child: Text(s['name']),
-                    );
-                  }).toList(),
-                  onChanged: selectedStandard == null ? null : (val) {
-                    setState(() {
-                      selectedStream = val;
-                      selectedSubject = null;
-                    });
-                    if (val != null) fetchSubjects(val);
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Subjects Dropdown
-                DropdownButtonFormField<int>(
-                  value: selectedSubject,
-                  hint: const Text('Select Subject'),
-                  items: subjects.map<DropdownMenuItem<int>>((s) {
-                    return DropdownMenuItem<int>(
-                      value: s['id'],
-                      child: Text(s['name']),
-                    );
-                  }).toList(),
-                  onChanged: selectedStream == null ? null : (val) {
-                    setState(() => selectedSubject = val);
-                  },
-                ),
-                const SizedBox(height: 32),
-
-                FilledButton.icon(
-                  onPressed: selectedSubject == null
-                      ? null
-                      : () {
-                          final stdName = standards.firstWhere((x) => x['id'] == selectedStandard)['name'];
-                          final strmName = streams.firstWhere((x) => x['id'] == selectedStream)['name'];
-                          final subName = subjects.firstWhere((x) => x['id'] == selectedSubject)['name'];
-                          widget.onSubjectSelected(
-                            selectedStandard!,
-                            stdName,
-                            selectedStream!,
-                            strmName,
-                            selectedSubject!,
-                            subName,
-                          );
-                        },
-                  icon: const Icon(Icons.explore_outlined),
-                  label: const Text('Launch Research Workspace'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- WORKSPACE SCREEN ---
-class WorkspaceScreen extends StatefulWidget {
-  final String? authToken;
-  final String? userName;
-  final int standardId;
-  final String standardName;
-  final int streamId;
-  final String streamName;
-  final int subjectId;
-  final String subjectName;
-  final VoidCallback onBack;
-  final VoidCallback onLogout;
-
-  const WorkspaceScreen({
-    super.key,
-    required this.authToken,
-    required this.userName,
-    required this.standardId,
-    required this.standardName,
-    required this.streamId,
-    required this.streamName,
-    required this.subjectId,
-    required this.subjectName,
-    required this.onBack,
-    required this.onLogout,
-  });
-
-  @override
-  State<WorkspaceScreen> createState() => _WorkspaceScreenState();
-}
-
-class _WorkspaceScreenState extends State<WorkspaceScreen> {
+  // Deep Research State
   bool isResearching = false;
-  List<String> logs = [];
-  List<dynamic> topQuestions = [];
-  dynamic activeQuestion;
-  int? activeRunId;
+  List<String> researchLogs = [];
+  String? activeJobId;
 
-  // Chat parameters
-  final chatController = TextEditingController();
-  final followUpController = TextEditingController();
-  List<Map<String, String>> chatMessages = [];
-  bool isChatLoading = false;
+  // Results State
+  late TabController _tabController;
+  List<dynamic> questionClusters = [];
+  List<dynamic> sourcePapers = [];
+  bool isLoadingResults = false;
 
   @override
   void initState() {
     super.initState();
-    chatMessages.add({
-      'role': 'agent',
-      'text': 'Hello! I am your Academic Exam Intelligence Agent. '
-          'I can perform Deep Research across 10 years of question papers in ${widget.subjectName} to extract '
-          'and cluster recurring exam topics. Ask me anything or trigger the Deep Research job.'
-    });
-    fetchExistingQuestions();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadStandards();
   }
 
-  Future<void> fetchExistingQuestions() async {
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $anonKey',
+        'apikey': anonKey,
+      };
+
+  // ========== API METHODS ==========
+  Future<void> _loadStandards() async {
     try {
-      final res = await http.get(Uri.parse('http://localhost:8000/api/v1/subjects/${widget.subjectId}/top-questions'));
+      final res = await http.get(
+        Uri.parse('$apiBase/taxonomy?type=standards'),
+        headers: _headers,
+      );
       if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as List<dynamic>;
         setState(() {
-          topQuestions = jsonDecode(res.body);
-          if (topQuestions.isNotEmpty && activeQuestion == null) {
-            activeQuestion = topQuestions.first;
+          standards = data;
+          if (standards.isNotEmpty) {
+            _selectStandard(standards.first['id']);
           }
         });
       }
     } catch (_) {}
   }
 
-  Future<void> triggerDeepResearch() async {
+  Future<void> _selectStandard(int standardId) async {
+    setState(() {
+      selectedStandardId = standardId;
+      selectedStreamId = null;
+      selectedSubjectId = null;
+      selectedSubjectName = null;
+      streams = [];
+      subjects = [];
+      questionClusters = [];
+      sourcePapers = [];
+    });
+
+    try {
+      final res = await http.get(
+        Uri.parse('$apiBase/taxonomy?type=streams&standard_id=$standardId'),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as List<dynamic>;
+        setState(() {
+          streams = data;
+          if (streams.isNotEmpty) {
+            _selectStream(streams.first['id']);
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _selectStream(int streamId) async {
+    setState(() {
+      selectedStreamId = streamId;
+      selectedSubjectId = null;
+      selectedSubjectName = null;
+      subjects = [];
+      questionClusters = [];
+      sourcePapers = [];
+    });
+
+    try {
+      final res = await http.get(
+        Uri.parse('$apiBase/taxonomy?type=subjects&stream_id=$streamId'),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as List<dynamic>;
+        setState(() {
+          subjects = data;
+          if (subjects.isNotEmpty) {
+            _selectSubject(subjects.first['id'], subjects.first['name']);
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _selectSubject(int subjectId, String name) {
+    setState(() {
+      selectedSubjectId = subjectId;
+      selectedSubjectName = name;
+    });
+    _fetchTopQuestionsAndPapers(subjectId);
+  }
+
+  Future<void> _fetchTopQuestionsAndPapers(int subjectId) async {
+    setState(() => isLoadingResults = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$apiBase/top-questions?subject_id=$subjectId&limit=50'),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map<String, dynamic>) {
+          setState(() {
+            questionClusters = data['clusters'] ?? [];
+            sourcePapers = data['papers'] ?? [];
+          });
+        } else if (data is List) {
+          setState(() {
+            questionClusters = data;
+          });
+        }
+      }
+    } catch (_) {} finally {
+      setState(() => isLoadingResults = false);
+    }
+  }
+
+  // NLP Query Decomposition Agent
+  Future<void> _handleNLPQuery(String query) async {
+    if (query.trim().isEmpty) return;
+    setState(() => isSearchingNLP = true);
+
+    try {
+      final res = await http.post(
+        Uri.parse('$apiBase/parse-query'),
+        headers: _headers,
+        body: jsonEncode({'query': query}),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final stdId = data['detected_standard_id'];
+        final subId = data['detected_subject_id'];
+        final years = data['years'];
+
+        if (years != null && [5, 7, 10].contains(years)) {
+          setState(() => selectedYears = years);
+        }
+
+        if (stdId != null) {
+          await _selectStandard(stdId);
+        }
+
+        if (subId != null) {
+          final subName = data['detected_subject_name'] ?? 'Subject';
+          _selectSubject(subId, subName);
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF8B5CF6),
+            content: Text(data['search_summary'] ?? 'Search filter applied!'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.redAccent, content: Text('NLP Parser error: $e')),
+      );
+    } finally {
+      setState(() => isSearchingNLP = false);
+    }
+  }
+
+  // Trigger Deep Research
+  Future<void> _startDeepResearch() async {
+    if (selectedSubjectId == null) return;
     setState(() {
       isResearching = true;
-      logs = ['Enqueuing background analysis task...'];
+      researchLogs = ['Initiating deep research for $selectedSubjectName (${selectedYears} Years)...'];
     });
 
     try {
       final res = await http.post(
-        Uri.parse('http://localhost:8000/api/v1/subjects/${widget.subjectId}/deep-research'),
+        Uri.parse('$apiBase/start-research'),
+        headers: _headers,
+        body: jsonEncode({
+          'subject_id': selectedSubjectId,
+          'years': selectedYears,
+          'query_prompt': _queryController.text.trim().isNotEmpty ? _queryController.text.trim() : null,
+        }),
       );
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        activeRunId = data['run_id'];
-        pollProgress();
+        activeJobId = data['job_id'];
+        _pollJobProgress(activeJobId!);
+      } else {
+        setState(() => isResearching = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.redAccent, content: Text('Research trigger failed: ${res.body}')),
+        );
       }
     } catch (e) {
-      setState(() {
-        isResearching = false;
-        logs.add('Error: Could not connect to deep research worker.');
-      });
+      setState(() => isResearching = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.redAccent, content: Text('Connection error: $e')),
+      );
     }
   }
 
-  Future<void> pollProgress() async {
-    while (isResearching && activeRunId != null) {
-      await Future.delayed(const Duration(seconds: 3));
+  Future<void> _pollJobProgress(String jobId) async {
+    while (isResearching) {
+      await Future.delayed(const Duration(seconds: 2));
       try {
-        final res = await http.get(Uri.parse('http://localhost:8000/api/v1/research-runs/$activeRunId/progress'));
+        final res = await http.get(
+          Uri.parse('$apiBase/job-progress?id=$jobId'),
+          headers: _headers,
+        );
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
+          final status = data['status'];
+          final logs = List<String>.from(data['progress'] ?? []);
+
           setState(() {
-            logs = List<String>.from(data['progress'] ?? []);
+            researchLogs = logs;
           });
-          
-          if (data['status'] == 'completed') {
-            setState(() {
-              isResearching = false;
-              logs.add('Processing Complete! Compiling list...');
-            });
-            chatMessages.add({
-              'role': 'agent',
-              'text': 'Deep research task has completed successfully. I have extracted and clustered all recurring exam questions. The Top 50 prep list is now ready for review!'
-            });
-            fetchExistingQuestions();
+
+          if (status == 'done') {
+            setState(() => isResearching = false);
+            _fetchTopQuestionsAndPapers(selectedSubjectId!);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: Color(0xFF10B981),
+                content: Text('🎉 Deep Research & LaTeX Question Bank compiled successfully!'),
+              ),
+            );
             break;
-          } else if (data['status'] == 'failed') {
-            setState(() {
-              isResearching = false;
-              logs.add('Failed. See logs above.');
-            });
+          } else if (status == 'failed') {
+            setState(() => isResearching = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(backgroundColor: Colors.redAccent, content: Text('Research failed: ${data['error']}')),
+            );
             break;
           }
         }
-      } catch (e) {
+      } catch (_) {
         break;
       }
     }
   }
 
-  Future<void> sendChatMessage(String prompt) async {
-    if (prompt.trim().isEmpty) return;
-    setState(() {
-      chatMessages.add({'role': 'student', 'text': prompt});
-      isChatLoading = true;
-    });
-    chatController.clear();
-
-    try {
-      // Perplexity style chatbot interaction, if deep research completed, answer using subject info
-      // Simple direct question answer hit:
-      final res = await http.post(
-        Uri.parse('http://localhost:8000/api/v1/projects/1/questions'), // fallback standard
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'question': prompt}),
-      );
-      // Simulating a fast response from general tutor
-      final responseText = "I'm analyzing the subject '${widget.subjectName}' to assist you. To ask a follow-up on a specific exam question, please select that question on the right panel and use the follow-up chat box there.";
-      setState(() {
-        chatMessages.add({'role': 'agent', 'text': responseText});
-      });
-    } catch (_) {
-      setState(() {
-        chatMessages.add({'role': 'agent', 'text': 'Connection error. Please try again.'});
-      });
-    } finally {
-      setState(() => isChatLoading = false);
-    }
+  // Ask AI Tutor Modal
+  void _openTutorModal(int clusterId, String questionText, String? solution) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF131B2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => TutorChatSheet(
+        clusterId: clusterId,
+        questionText: questionText,
+        solution: solution,
+        apiBase: apiBase,
+        anonKey: anonKey,
+      ),
+    );
   }
 
-  Future<void> sendFollowUpQuestion(int clusterId, String prompt) async {
-    if (prompt.trim().isEmpty) return;
-    setState(() {
-      chatMessages.add({'role': 'student', 'text': 'Follow-up regarding selected question: $prompt'});
-      isChatLoading = true;
-    });
-    followUpController.clear();
+  // Configure Supabase Endpoint Settings Modal
+  void _openSettingsDialog() {
+    final baseController = TextEditingController(text: apiBase);
+    final keyController = TextEditingController(text: anonKey);
 
-    try {
-      final res = await http.post(
-        Uri.parse('http://localhost:8000/api/v1/questions/clusters/$clusterId/ask'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'prompt': prompt}),
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        setState(() {
-          chatMessages.add({'role': 'agent', 'text': data['response']});
-        });
-      } else {
-        setState(() {
-          chatMessages.add({'role': 'agent', 'text': 'Tutor failed to process that follow-up question.'});
-        });
-      }
-    } catch (_) {
-      setState(() {
-        chatMessages.add({'role': 'agent', 'text': 'Connection error. Please try again.'});
-      });
-    } finally {
-      setState(() => isChatLoading = false);
-    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF131B2E),
+        title: const Text('⚡ Cloud Endpoint Settings'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: baseController,
+              decoration: const InputDecoration(
+                labelText: 'Supabase Functions URL',
+                hintText: 'https://xxxx.supabase.co/functions/v1',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: keyController,
+              decoration: const InputDecoration(
+                labelText: 'Supabase Anon Public Key',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
+            onPressed: () {
+              setState(() {
+                apiBase = baseController.text.trim();
+                anonKey = keyController.text.trim();
+              });
+              Navigator.pop(ctx);
+              _loadStandards();
+            },
+            child: const Text('Save & Reconnect'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 900;
-    
+    final isDesktop = MediaQuery.of(context).size.width > 850;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_outlined),
-          onPressed: widget.onBack,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.school, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Exam Focus AI',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                ),
+                Text(
+                  'Academic Deep Research & Question Bank',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                ),
+              ],
+            ),
+          ],
         ),
-        title: Text('${widget.subjectName} — Research Workspace'),
         actions: [
-          Center(child: Text('${widget.userName ?? "Student"} (${widget.standardName})', style: const TextStyle(fontWeight: FontWeight.bold))),
-          IconButton(icon: const Icon(Icons.logout_outlined), onPressed: widget.onLogout),
-          const SizedBox(width: 16),
+          // Guest / Profile badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(20),
+              border: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.person_outline, size: 16, color: Color(0xFF8B5CF6)),
+                const SizedBox(width: 6),
+                Text(studentName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w640)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Color(0xFF94A3B8)),
+            onPressed: _openSettingsDialog,
+            tooltip: 'Configure Cloud API',
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Row(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Natural Language AI Search Bar
+            _buildNLPSearchBar(),
+
+            const SizedBox(height: 18),
+
+            // 2. Academic Hierarchy Selectors (Standard -> Stream -> Subject)
+            _buildHierarchyFilters(),
+
+            const SizedBox(height: 18),
+
+            // 3. Time Horizon Selector (5 / 7 / 10 Years) + Start Research CTA
+            _buildYearAndResearchControls(),
+
+            const SizedBox(height: 20),
+
+            // 4. Research Progress Overlay (if active)
+            if (isResearching) _buildProgressOverlay(),
+
+            const SizedBox(height: 16),
+
+            // 5. Dual Tabs: Question Bank (LaTeX Solutions) & Downloadable Papers Hub
+            _buildResultsSection(isDesktop),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ========== UI BUILDER COMPONENTS ==========
+
+  Widget _buildNLPSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF131B2E),
+        borderRadius: BorderRadius.circular(16),
+        border: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF8B5CF6).withOpacity(0.15),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
         children: [
-          // Left Panel (Conversational chatbot + logs)
+          const Icon(Icons.auto_awesome, color: Color(0xFF8B5CF6), size: 22),
+          const SizedBox(width: 12),
           Expanded(
-            flex: 4,
-            child: Container(
-              decoration: const BoxDecoration(
-                border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
-              ),
-              child: Column(
-                children: [
-                  // Topic Headers
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    color: Colors.white,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Conversational RAG Agent', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        if (!isResearching)
-                          FilledButton.icon(
-                            onPressed: triggerDeepResearch,
-                            icon: const Icon(Icons.play_arrow_outlined),
-                            label: const Text('Start Deep Research'),
-                          )
-                        else
-                          Row(
-                            children: const [
-                              SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                              SizedBox(width: 8),
-                              Text('Deep Researching...', style: TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Live Progress log if active
-                  if (logs.isNotEmpty)
-                    Container(
-                      height: 130,
-                      width: double.infinity,
-                      margin: const EdgeInsets.all(12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFAF5FF), // soft lavender
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE9D5FF)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Live Execution Logs:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF6B21A8), fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: logs.length,
-                              itemBuilder: (ctx, i) => Text(
-                                logs[i],
-                                style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF7E22CE)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  
-                  // Chat Messages Area
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: chatMessages.length,
-                      itemBuilder: (ctx, i) {
-                        final msg = chatMessages[i];
-                        final isAgent = msg['role'] == 'agent';
-                        return Align(
-                          alignment: isAgent ? Alignment.centerLeft : Alignment.centerRight,
-                          child: Container(
-                            maxWidth: 500,
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: isAgent ? Colors.white : const Color(0xFFEEF2F6),
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(12),
-                                topRight: const Radius.circular(12),
-                                bottomLeft: isAgent ? Radius.zero : const Radius.circular(12),
-                                bottomRight: isAgent ? const Radius.circular(12) : Radius.zero,
-                              ),
-                              border: isAgent ? Border.all(color: const Color(0xFFE2E8F0)) : null,
-                            ),
-                            child: LaTeXMarkdownText(text: msg['text'] ?? ''),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  if (isChatLoading)
-                    const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))),
-                    ),
-
-                  // Bottom Prompt Bar
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    color: Colors.white,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: chatController,
-                            decoration: const InputDecoration(
-                              hintText: 'Ask the research agent about exam patterns...',
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                            ),
-                            onSubmitted: sendChatMessage,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.send_outlined, color: Color(0xFF4F46E5)),
-                          onPressed: () => sendChatMessage(chatController.text),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            child: TextField(
+              controller: _queryController,
+              onSubmitted: _handleNLPQuery,
+              decoration: const InputDecoration(
+                hintText: 'Ask AI: "CBSE 12th Physics 5 marks derivations for last 7 years"…',
+                hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                border: InputBorder.none,
               ),
             ),
           ),
-          
-          // Right Panel (Top 50 Prep list)
-          Expanded(
-            flex: 6,
-            child: Container(
-              color: const Color(0xFFF1F5F9),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    color: Colors.white,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Top Recurring Prep Questions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                        Chip(
-                          label: Text('${topQuestions.length} Topics Clustered'),
-                          backgroundColor: const Color(0xFFEEF2F6),
-                        ),
-                      ],
+          if (isSearchingNLP)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B5CF6)),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.search, color: Color(0xFF06B6D4)),
+              onPressed: () => _handleNLPQuery(_queryController.text),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHierarchyFilters() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Standard Chips
+        const Text(
+          '1. Select Academic Board & Class',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: standards.map((s) {
+              final isSelected = s['id'] == selectedStandardId;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: Text(s['name']),
+                  selected: isSelected,
+                  onSelected: (_) => _selectStandard(s['id']),
+                  selectedColor: const Color(0xFF8B5CF6).withOpacity(0.3),
+                  checkmarkColor: const Color(0xFF8B5CF6),
+                  backgroundColor: const Color(0xFF131B2E),
+                  side: BorderSide(
+                    color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFF1E293B),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Stream Chips
+        if (streams.isNotEmpty) ...[
+          const Text(
+            '2. Select Stream / Group',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: streams.map((st) {
+                final isSelected = st['id'] == selectedStreamId;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(st['name']),
+                    selected: isSelected,
+                    onSelected: (_) => _selectStream(st['id']),
+                    selectedColor: const Color(0xFF06B6D4).withOpacity(0.3),
+                    backgroundColor: const Color(0xFF131B2E),
+                    side: BorderSide(
+                      color: isSelected ? const Color(0xFF06B6D4) : const Color(0xFF1E293B),
                     ),
                   ),
-                  
-                  if (topQuestions.isEmpty)
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          'No questions analyzed yet.\nClick "Start Deep Research" in the left panel to begin.',
-                          style: TextStyle(color: Color(0xFF64748B)),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: Row(
-                        children: [
-                          // Clustered Questions List
-                          Expanded(
-                            flex: 5,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(12),
-                              itemCount: topQuestions.length,
-                              itemBuilder: (ctx, i) {
-                                final c = topQuestions[i];
-                                final isSelected = activeQuestion != null && activeQuestion['id'] == c['id'];
-                                return GestureDetector(
-                                  onTap: () => setState(() => activeQuestion = c),
-                                  child: Card(
-                                    color: isSelected ? const Color(0xFFEEF2F6) : Colors.white,
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(14),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFECFDF5),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  'Appeared: ${c['frequency_count']}x',
-                                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
-                                                ),
-                                              ),
-                                              Text(
-                                                'Years: ${c['years_appeared']}',
-                                                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            c['canonical_text'],
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Wrap(
-                                            spacing: 4,
-                                            children: (c['concept_tags'] as List<dynamic>).map<Widget>((tag) {
-                                              return Chip(
-                                                label: Text(tag, style: const TextStyle(fontSize: 10)),
-                                                padding: EdgeInsets.zero,
-                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          
-                          // Solution Viewer
-                          if (activeQuestion != null)
-                            Expanded(
-                              flex: 7,
-                              child: Container(
-                                color: Colors.white,
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Solution & Analysis', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                    const Divider(),
-                                    Expanded(
-                                      child: SingleChildScrollView(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              activeQuestion['canonical_text'],
-                                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                                            ),
-                                            const SizedBox(height: 16),
-                                            const Text('Model Answer:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF4F46E5))),
-                                            const SizedBox(height: 8),
-                                            LaTeXMarkdownText(text: activeQuestion['solution_markdown']),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    
-                                    // Local reference tag links
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      color: const Color(0xFFF8FAFC),
-                                      child: Text(
-                                        'Reference file stored in: /papers_repository',
-                                        style: TextStyle(fontStyle: FontStyle.italic, fontSize: 10, color: Colors.slate[600]),
-                                      ),
-                                    ),
-                                    
-                                    // Follow-up Chat block for active question
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: TextField(
-                                            controller: followUpController,
-                                            decoration: const InputDecoration(
-                                              hintText: 'Ask follow-up on this answer...',
-                                              contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                                            ),
-                                            onSubmitted: (val) => sendFollowUpQuestion(activeQuestion['id'], val),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        IconButton(
-                                          icon: const Icon(Icons.question_answer_outlined, color: Color(0xFF4F46E5)),
-                                          onPressed: () => sendFollowUpQuestion(activeQuestion['id'], followUpController.text),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Subject Grid / Chips
+        if (subjects.isNotEmpty) ...[
+          const Text(
+            '3. Select Target Subject',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: subjects.map((sub) {
+              final isSelected = sub['id'] == selectedSubjectId;
+              return ActionChip(
+                avatar: Icon(
+                  Icons.book,
+                  size: 16,
+                  color: isSelected ? Colors.white : const Color(0xFF10B981),
+                ),
+                label: Text(sub['name']),
+                backgroundColor: isSelected ? const Color(0xFF10B981) : const Color(0xFF131B2E),
+                side: BorderSide(
+                  color: isSelected ? const Color(0xFF10B981) : const Color(0xFF1E293B),
+                ),
+                onPressed: () => _selectSubject(sub['id'], sub['name']),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildYearAndResearchControls() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131B2E),
+        borderRadius: BorderRadius.circular(16),
+        border: BorderSide(color: const Color(0xFF1E293B)),
+      ),
+      child: Row(
+        children: [
+          // Year Selection Pills
+          const Text('Analysis Horizon: ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+          const SizedBox(width: 8),
+          ...[5, 7, 10].map((y) {
+            final isSel = selectedYears == y;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ChoiceChip(
+                label: Text('$y Yrs'),
+                selected: isSel,
+                onSelected: (_) => setState(() => selectedYears = y),
+                selectedColor: const Color(0xFFF59E0B).withOpacity(0.3),
+                backgroundColor: const Color(0xFF0B0F19),
+                side: BorderSide(
+                  color: isSel ? const Color(0xFFF59E0B) : const Color(0xFF1E293B),
+                ),
+              ),
+            );
+          }),
+
+          const Spacer(),
+
+          // Start Deep Research Button
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: isResearching
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.rocket_launch, size: 18),
+            label: Text(
+              isResearching ? 'Deep Researching…' : 'Start Deep Research',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            onPressed: isResearching || selectedSubjectId == null ? null : _startDeepResearch,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressOverlay() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1B4B),
+        borderRadius: BorderRadius.circular(16),
+        border: BorderSide(color: const Color(0xFF8B5CF6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.radar, color: Color(0xFF8B5CF6), size: 20),
+              SizedBox(width: 8),
+              Text(
+                'AI Agent Live Deep Researching…',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...researchLogs.map(
+            (log) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                '• $log',
+                style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1), fontFamily: 'monospace'),
               ),
             ),
           ),
@@ -1116,137 +740,370 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       ),
     );
   }
-}
 
-// --- LIGHTWEIGHT CUSTOM LATEX & MARKDOWN FORMATTED TEXT WIDGET ---
-class LaTeXMarkdownText extends StatelessWidget {
-  final String text;
-  
-  const LaTeXMarkdownText({super.key, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    // Custom parser that displays LaTeX math formulas block/inline beautifully without compile-time SDK issues
-    final List<Widget> spans = [];
-    final List<String> lines = text.split('\n');
-    
-    for (var line in lines) {
-      if (line.trim().isEmpty) continue;
-      
-      // Parse block equations $$
-      if (line.trim().startsWith('\$\$') && line.trim().endsWith('\$\$')) {
-        final equation = line.replaceAll('\$\$', '').trim();
-        spans.add(
-          Container(
-            width: double.infinity,
-            alignment: Alignment.center,
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEEF2F6),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: const Color(0xFFCBD5E1)),
-            ),
-            child: Text(
-              equation,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontStyle: FontStyle.italic,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF312E81), // deep indigo
-              ),
-            ),
+  Widget _buildResultsSection(bool isDesktop) {
+    return Column(
+      children: [
+        // Tabs Header
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF131B2E),
+            borderRadius: BorderRadius.circular(12),
           ),
-        );
-        continue;
-      }
-      
-      // Parse Header
-      if (line.startsWith('### ')) {
-        spans.add(Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 4),
-          child: Text(
-            line.replaceFirst('### ', ''),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF4F46E5)),
-          ),
-        ));
-        continue;
-      }
-      
-      // Parse Bullet points
-      bool isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ');
-      String cleanLine = line;
-      if (isBullet) {
-        cleanLine = line.trim().replaceFirst('- ', '').replaceFirst('* ', '');
-      }
-
-      // Parse inline Math $ ... $
-      List<TextSpan> inlineSpans = [];
-      final parts = cleanLine.split('\$');
-      for (int idx = 0; idx < parts.length; idx++) {
-        final part = parts[idx];
-        if (idx % 2 == 1) {
-          // Math block
-          inlineSpans.add(
-            TextSpan(
-              text: ' $part ',
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.bold,
-                backgroundColor: Color(0xFFF1F5F9),
-                color: Color(0xFF4338CA),
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: const Color(0xFF8B5CF6),
+            labelColor: const Color(0xFF8B5CF6),
+            unselectedLabelColor: const Color(0xFF94A3B8),
+            tabs: [
+              Tab(
+                icon: const Icon(Icons.auto_stories, size: 18),
+                text: 'Top Recurring Questions (${questionClusters.length})',
               ),
-            ),
-          );
-        } else {
-          // Regular text check for ** bold
-          final boldParts = part.split('\*\*');
-          for (int bIdx = 0; bIdx < boldParts.length; bIdx++) {
-            final bPart = boldParts[bIdx];
-            inlineSpans.add(
-              TextSpan(
-                text: bPart,
-                style: TextStyle(
-                  fontWeight: bIdx % 2 == 1 ? FontWeight.bold : FontWeight.normal,
-                  color: const Color(0xFF1E293B),
-                ),
-              ),
-            );
-          }
-        }
-      }
-      
-      spans.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isBullet)
-                const Padding(
-                  padding: EdgeInsets.only(top: 6, right: 8),
-                  child: Icon(Icons.circle, size: 6, color: Color(0xFF64748B)),
-                ),
-              Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: const TextStyle(fontSize: 13, height: 1.5),
-                    children: inlineSpans,
-                  ),
-                ),
+              Tab(
+                icon: const Icon(Icons.download, size: 18),
+                text: 'Downloadable Papers Hub (${sourcePapers.length})',
               ),
             ],
           ),
         ),
-      );
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: spans,
+
+        const SizedBox(height: 16),
+
+        // Tabs Content
+        SizedBox(
+          height: 600,
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              // Tab 1: Question Bank
+              isLoadingResults
+                  ? const Center(child: CircularProgressIndicator())
+                  : questionClusters.isEmpty
+                      ? _buildEmptyState('No recurring questions yet. Click "Start Deep Research" above to harvest questions!')
+                      : ListView.builder(
+                          itemCount: questionClusters.length,
+                          itemBuilder: (ctx, idx) => _buildQuestionClusterCard(questionClusters[idx], idx + 1),
+                        ),
+
+              // Tab 2: Downloadable Papers Hub
+              isLoadingResults
+                  ? const Center(child: CircularProgressIndicator())
+                  : sourcePapers.isEmpty
+                      ? _buildEmptyState('No PDF papers harvested yet for this subject.')
+                      : ListView.builder(
+                          itemCount: sourcePapers.length,
+                          itemBuilder: (ctx, idx) => _buildSourcePaperCard(sourcePapers[idx]),
+                        ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionClusterCard(dynamic item, int rank) {
+    final text = item['canonical_text'] ?? '';
+    final freq = item['frequency_count'] ?? 1;
+    final years = List<int>.from(item['years_appeared'] ?? []);
+    final solution = item['solution_markdown'];
+    final marks = item['marks_hint'] ?? '4 Marks';
+    final qType = item['question_type'] ?? 'Derivation';
+    final clusterId = item['id'];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: CircleAvatar(
+          backgroundColor: rank <= 3 ? const Color(0xFFF59E0B) : const Color(0xFF8B5CF6),
+          child: Text('#$rank', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+        ),
+        title: Text(
+          text,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: BorderSide(color: const Color(0xFFF59E0B)),
+                ),
+                child: Text('🔥 Repeated ${freq}x', style: const TextStyle(fontSize: 11, color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF06B6D4).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(marks, style: const TextStyle(fontSize: 11, color: Color(0xFF06B6D4))),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(qType, style: const TextStyle(fontSize: 11, color: Color(0xFF10B981))),
+              ),
+              Text(
+                'Years: ${years.join(", ")}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
+            ],
+          ),
+        ),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: const Color(0xFF0B0F19),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '📖 Step-by-Step Model Solution & LaTeX Formula:',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6), fontSize: 13),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E293B),
+                        foregroundColor: const Color(0xFF06B6D4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.chat, size: 14),
+                      label: const Text('Ask AI Tutor', style: TextStyle(fontSize: 12)),
+                      onPressed: () => _openTutorModal(clusterId, text, solution),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SelectableText(
+                  solution ?? 'Solution is compiling in the background...',
+                  style: const TextStyle(fontSize: 13, height: 1.5, color: Color(0xFFE2E8F0)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSourcePaperCard(dynamic paper) {
+    final title = paper['title'] ?? 'Board Exam Paper';
+    final year = paper['year'] ?? 2024;
+    final examType = paper['exam_type'] ?? 'Annual Public Exam';
+    final fileSize = paper['file_size'] ?? '1.6 MB';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEF4444).withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.picture_as_pdf, color: Color(0xFFEF4444), size: 24),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        subtitle: Text('$year • $examType • $fileSize', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+        trailing: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          icon: const Icon(Icons.file_download_outlined, size: 16),
+          label: const Text('Download PDF'),
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Downloading $title ($fileSize)...')),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String msg) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.auto_stories_outlined, size: 48, color: Color(0xFF475569)),
+          const SizedBox(height: 12),
+          Text(msg, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14)),
+        ],
+      ),
     );
   }
 }
 
+// ========== AI TUTOR CHAT SHEET ==========
+class TutorChatSheet extends StatefulWidget {
+  final int clusterId;
+  final String questionText;
+  final String? solution;
+  final String apiBase;
+  final String anonKey;
+
+  const TutorChatSheet({
+    super.key,
+    required this.clusterId,
+    required this.questionText,
+    this.solution,
+    required this.apiBase,
+    required this.anonKey,
+  });
+
+  @override
+  State<TutorChatSheet> createState() => _TutorChatSheetState();
+}
+
+class _TutorChatSheetState extends State<TutorChatSheet> {
+  final TextEditingController _promptController = TextEditingController();
+  final List<Map<String, String>> messages = [];
+  bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    messages.add({
+      'sender': 'tutor',
+      'text': 'Hello! I am your AI Academic Tutor. Feel free to ask any doubt or ask me to explain any step of this question!',
+    });
+  }
+
+  Future<void> _sendPrompt() async {
+    final prompt = _promptController.text.trim();
+    if (prompt.isEmpty) return;
+
+    setState(() {
+      messages.add({'sender': 'student', 'text': prompt});
+      isLoading = true;
+    });
+    _promptController.clear();
+
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.apiBase}/ask-tutor'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.anonKey}',
+          'apikey': widget.anonKey,
+        },
+        body: jsonEncode({
+          'cluster_id': widget.clusterId,
+          'prompt': prompt,
+        }),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          messages.add({'sender': 'tutor', 'text': data['response'] ?? 'Answer received.'});
+        });
+      } else {
+        setState(() {
+          messages.add({'sender': 'tutor', 'text': 'Sorry, I encountered an error answering that.'});
+        });
+      }
+    } catch (e) {
+      setState(() {
+        messages.add({'sender': 'tutor', 'text': 'Connection error: $e'});
+      });
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: SizedBox(
+        height: 550,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.school, color: Color(0xFF8B5CF6)),
+                const SizedBox(width: 8),
+                const Text('AI Academic Tutor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Spacer(),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              ],
+            ),
+            const Divider(color: Color(0xFF1E293B)),
+            Expanded(
+              child: ListView.builder(
+                itemCount: messages.length,
+                itemBuilder: (ctx, idx) {
+                  final m = messages[idx];
+                  final isStudent = m['sender'] == 'student';
+                  return Align(
+                    alignment: isStudent ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isStudent ? const Color(0xFF8B5CF6) : const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(m['text'] ?? '', style: const TextStyle(fontSize: 13, color: Colors.white)),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (isLoading)
+              const Padding(
+                padding: EdgeInsets.all(8),
+                child: LinearProgressIndicator(color: Color(0xFF8B5CF6)),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _promptController,
+                      onSubmitted: (_) => _sendPrompt(),
+                      decoration: const InputDecoration(
+                        hintText: 'Ask a doubt on this question...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Color(0xFF8B5CF6)),
+                    onPressed: _sendPrompt,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
