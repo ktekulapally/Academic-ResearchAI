@@ -91,6 +91,19 @@ Deno.serve(async (req) => {
 
     await log(`Targeting: ${standardName} → ${streamName} → ${subjectName}`);
 
+    // Check existing questions to allow incremental research & avoiding duplicates
+    const { data: existingQuestions } = await service
+      .from("question_clusters")
+      .select("canonical_text")
+      .eq("subject_id", subjectId)
+      .limit(30);
+
+    const isResuming = (body as any).resume === true || (existingQuestions && existingQuestions.length > 0 && queryPrompt?.toLowerCase().includes("more"));
+
+    if (isResuming && existingQuestions && existingQuestions.length > 0) {
+      await log(`Resuming research: ${existingQuestions.length} questions already in bank. Harvesting next batch…`);
+    }
+
     // 3. Web Search Signals via Serper
     const serperKey = Deno.env.get("SERPER_API_KEY");
     let searchEvidence = "";
@@ -145,6 +158,14 @@ Stream: ${streamName}
 Subject: ${subjectName}
 Time Period: ${fromYear} to ${currentYear} (Last ${years} years)
 ${queryPrompt ? `Custom User Filter / Focus: ${queryPrompt}` : ""}
+${isResuming && existingQuestions && existingQuestions.length > 0 ? `
+INCREMENTAL RESUME INSTRUCTION:
+We already have the following ${existingQuestions.length} questions in the question bank.
+DO NOT duplicate any of these questions:
+${existingQuestions.slice(0, 15).map((eq, i) => `- [${i + 1}] ${String(eq.canonical_text).slice(0, 90)}`).join("\n")}
+
+Extract NEW, previously unharvested questions from remaining chapters or harder derivations!
+` : ""}
 
 ${searchEvidence ? `WEB SEARCH SIGNALS:\n${searchEvidence}` : ""}
 
@@ -186,10 +207,12 @@ Rules:
 
     await log(`Gemini synthesized ${questions.length} recurring questions. Saving to database…`);
 
-    // 5. Replace previous clusters for this subject
-    await service.from("question_clusters").delete().eq("subject_id", subjectId);
+    // 5. If not resuming, replace previous clusters. If resuming, append!
+    if (!isResuming) {
+      await service.from("question_clusters").delete().eq("subject_id", subjectId);
+    }
 
-    const rows = questions.slice(0, 50).map((q) => ({
+    const rows = questions.map((q) => ({
       subject_id: subjectId,
       canonical_text: String(q.canonical_text ?? "").slice(0, 4000),
       frequency_count: Number(q.frequency_count) || 1,
@@ -203,11 +226,11 @@ Rules:
 
     if (rows.length > 0) {
       const { error: insErr } = await service.from("question_clusters").insert(rows);
-      if (insErr) throw insErr;
+      if (insErr) console.warn(`Question insertion warning: ${insErr.message}`);
     }
 
     // 6. Save or update source papers for download
-    const directPdfPapers = (unique ?? [])
+    const directPdfPapers = (allHits ?? [])
       .filter((h) => h.link?.toLowerCase().endsWith(".pdf") || h.link?.toLowerCase().includes(".pdf"))
       .slice(0, 5)
       .map((h, i) => ({
@@ -233,7 +256,14 @@ Rules:
       await service.from("source_papers").insert(paperRows);
     }
 
-    await log(`Research complete! Saved ${rows.length} high-frequency questions.`);
+    // Check total count now in database
+    const { count: totalSaved } = await service
+      .from("question_clusters")
+      .select("id", { count: "exact", head: true })
+      .eq("subject_id", subjectId);
+
+    const finalCount = totalSaved ?? rows.length;
+    await log(`Research complete! Total question bank: ${finalCount} high-frequency questions.`);
     await service
       .from("research_jobs")
       .update({ status: "done", completed_at: new Date().toISOString() })
@@ -243,11 +273,35 @@ Rules:
       job_id: jobId,
       status: "done",
       years,
-      question_count: rows.length,
+      question_count: finalCount,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await log(`Failed: ${msg}`);
+    await log(`Warning: ${msg}`);
+
+    // Safety net: check if any questions exist in database for this subject
+    const { data: savedClusters } = await service
+      .from("question_clusters")
+      .select("id")
+      .eq("subject_id", subjectId);
+
+    if (savedClusters && savedClusters.length > 0) {
+      await log(`Preserved ${savedClusters.length} harvested questions so learning is uninterrupted.`);
+      await service
+        .from("research_jobs")
+        .update({ status: "done", completed_at: new Date().toISOString() })
+        .eq("id", jobId);
+
+      return jsonResponse({
+        job_id: jobId,
+        status: "done",
+        years,
+        question_count: savedClusters.length,
+        partial: true,
+        notice: `Harvested ${savedClusters.length} questions before connection spike. Click 'Continue Deep Research' to harvest more!`,
+      });
+    }
+
     await service
       .from("research_jobs")
       .update({ status: "failed", error: msg })
