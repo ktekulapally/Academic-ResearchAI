@@ -420,8 +420,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     );
   }
 
-  // Trigger Deep Research
-  Future<void> _startDeepResearch() async {
+  // Trigger Deep Research (supports starting fresh or resuming/appending)
+  Future<void> _startDeepResearch({bool resume = false}) async {
     if (selectedSubjectId == null) return;
     setState(() {
       isResearching = true;
@@ -429,7 +429,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       researchError = null;
       _pollCount = 0;
       researchLogs = [
-        '⏱ ${_timestamp()} Initiating deep research for $selectedSubjectName ($selectedYears years)…',
+        resume
+            ? '⏱ ${_timestamp()} Continuing deep research for $selectedSubjectName (Harvesting next batch)…'
+            : '⏱ ${_timestamp()} Initiating deep research for $selectedSubjectName ($selectedYears years)…',
         '🌐 ${_timestamp()} Connecting to academic research agent…',
       ];
     });
@@ -441,15 +443,17 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       elapsed += 4;
       String? stageMsg;
       if (elapsed == 4) {
-        stageMsg = '🔍 ${_timestamp()} Searching Google & official portals for $selectedSubjectName papers ($selectedYears yrs)…';
+        stageMsg = resume
+            ? '🔍 ${_timestamp()} Querying uncovered syllabus chapters and difficult derivations…'
+            : '🔍 ${_timestamp()} Searching Google & official portals for $selectedSubjectName papers ($selectedYears yrs)…';
       } else if (elapsed == 10) {
         stageMsg = '📄 ${_timestamp()} Extracting exam archives, question structures & marking schemes…';
       } else if (elapsed == 18) {
-        stageMsg = '🧠 ${_timestamp()} Gemini 2.0 analyzing frequency, clustering recurring patterns & compiling LaTeX…';
+        stageMsg = '🧠 ${_timestamp()} Gemini analyzing frequency, clustering recurring patterns & compiling LaTeX…';
       } else if (elapsed == 28) {
         stageMsg = '📐 ${_timestamp()} Formatting step-by-step model solutions & step marking hints…';
       } else if (elapsed == 40) {
-        stageMsg = '💾 ${_timestamp()} Storing question clusters and PDF source references to database…';
+        stageMsg = '💾 ${_timestamp()} Appending newly harvested questions to question bank…';
       } else if (elapsed % 15 == 0) {
         stageMsg = '⏳ ${_timestamp()} Finalizing research compilation (${elapsed}s elapsed)…';
       }
@@ -465,6 +469,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
         body: jsonEncode({
           'subject_id': selectedSubjectId,
           'years': selectedYears,
+          'resume': resume,
           'query_prompt': _queryController.text.trim().isNotEmpty
               ? _queryController.text.trim()
               : null,
@@ -1189,13 +1194,25 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
               Expanded(child: Text(statusLabel, style: TextStyle(fontWeight: FontWeight.bold, color: statusColor, fontSize: 13))),
               if (isResearching)
                 SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: statusColor)),
-              if (!isResearching && researchStatus != 'idle')
+              if (!isResearching && researchStatus != 'idle') ...[
+                if (questionClusters.isNotEmpty)
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF10B981),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                    icon: const Icon(Icons.add_circle_outline, size: 14),
+                    label: const Text('Continue Research', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () => _startDeepResearch(resume: true),
+                  ),
+                const SizedBox(width: 4),
                 TextButton.icon(
                   style: TextButton.styleFrom(foregroundColor: statusColor, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
                   icon: const Icon(Icons.refresh, size: 14),
-                  label: const Text('Re-Run', style: TextStyle(fontSize: 12)),
-                  onPressed: _startDeepResearch,
+                  label: const Text('Re-Run Fresh', style: TextStyle(fontSize: 12)),
+                  onPressed: () => _startDeepResearch(resume: false),
                 ),
+              ],
             ]),
           ),
 
