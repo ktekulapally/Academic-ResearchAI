@@ -233,7 +233,7 @@ insert into subjects (stream_id, name)
 select s.id, t.sub_name 
 from streams s 
 join academic_standards a on s.standard_id = a.id,
-(values ('Mathematics 1A'), ('Mathematics 1B'), ('Physics 1'), ('Chemistry 1'), ('English 1')) as t(sub_name)
+(values ('Mathematics 1A'), ('Mathematics 1B'), ('Physics 1'), ('Chemistry 1'), ('English 1'), ('Sanskrit 1')) as t(sub_name)
 where a.name = 'TS Inter 1st Year (Junior)' and s.name = 'MPC'
 on conflict (stream_id, name) do nothing;
 
@@ -241,7 +241,7 @@ insert into subjects (stream_id, name)
 select s.id, t.sub_name 
 from streams s 
 join academic_standards a on s.standard_id = a.id,
-(values ('Botany 1'), ('Zoology 1'), ('Physics 1'), ('Chemistry 1'), ('English 1')) as t(sub_name)
+(values ('Botany 1'), ('Zoology 1'), ('Physics 1'), ('Chemistry 1'), ('English 1'), ('Sanskrit 1')) as t(sub_name)
 where a.name = 'TS Inter 1st Year (Junior)' and s.name = 'BiPC'
 on conflict (stream_id, name) do nothing;
 
@@ -249,7 +249,7 @@ insert into subjects (stream_id, name)
 select s.id, t.sub_name 
 from streams s 
 join academic_standards a on s.standard_id = a.id,
-(values ('Commerce 1'), ('Economics 1'), ('Civics 1'), ('English 1')) as t(sub_name)
+(values ('Commerce 1'), ('Economics 1'), ('Civics 1'), ('English 1'), ('Sanskrit 1')) as t(sub_name)
 where a.name = 'TS Inter 1st Year (Junior)' and s.name = 'CEC'
 on conflict (stream_id, name) do nothing;
 
@@ -258,7 +258,7 @@ insert into subjects (stream_id, name)
 select s.id, t.sub_name 
 from streams s 
 join academic_standards a on s.standard_id = a.id,
-(values ('Mathematics 2A'), ('Mathematics 2B'), ('Physics 2'), ('Chemistry 2'), ('English 2')) as t(sub_name)
+(values ('Mathematics 2A'), ('Mathematics 2B'), ('Physics 2'), ('Chemistry 2'), ('English 2'), ('Sanskrit 2')) as t(sub_name)
 where a.name = 'TS Inter 2nd Year (Senior)' and s.name = 'MPC'
 on conflict (stream_id, name) do nothing;
 
@@ -266,7 +266,7 @@ insert into subjects (stream_id, name)
 select s.id, t.sub_name 
 from streams s 
 join academic_standards a on s.standard_id = a.id,
-(values ('Botany 2'), ('Zoology 2'), ('Physics 2'), ('Chemistry 2'), ('English 2')) as t(sub_name)
+(values ('Botany 2'), ('Zoology 2'), ('Physics 2'), ('Chemistry 2'), ('English 2'), ('Sanskrit 2')) as t(sub_name)
 where a.name = 'TS Inter 2nd Year (Senior)' and s.name = 'BiPC'
 on conflict (stream_id, name) do nothing;
 

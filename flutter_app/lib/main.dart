@@ -348,24 +348,36 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     }
 
     // 4. Accurate Subject Detection
+    final previousSubjectId = selectedSubjectId;
     final stdName = selectedStandardId != null
         ? (standards.firstWhere((s) => s['id'] == selectedStandardId, orElse: () => {})['name']?.toString().toLowerCase() ?? '')
         : '';
     final isSecondYear = stdName.contains('2nd') || stdName.contains('senior');
 
     dynamic targetSub;
-    if (q.contains('physics')) {
+    if (q.contains('sanskrit')) {
+      final nameToFind = isSecondYear ? 'sanskrit 2' : 'sanskrit 1';
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains(nameToFind), orElse: () => subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('sanskrit'), orElse: () => null));
+    } else if (q.contains('physics')) {
       final nameToFind = isSecondYear ? 'physics 2' : 'physics';
       targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains(nameToFind), orElse: () => subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('physics'), orElse: () => null));
     } else if (q.contains('chemistry')) {
       final nameToFind = isSecondYear ? 'chemistry 2' : 'chemistry';
       targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains(nameToFind), orElse: () => subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('chemistry'), orElse: () => null));
+    } else if (q.contains('2b') || (q.contains('math') && q.contains('b'))) {
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('2b'), orElse: () => subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('1b'), orElse: () => null));
+    } else if (q.contains('2a') || (q.contains('math') && q.contains('a'))) {
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('2a'), orElse: () => subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('1a'), orElse: () => null));
     } else if (q.contains('botany')) {
       targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('botany'), orElse: () => null);
     } else if (q.contains('zoology')) {
       targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('zoology'), orElse: () => null);
     } else if (q.contains('english')) {
       targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('english'), orElse: () => null);
+    } else if (q.contains('telugu')) {
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('telugu'), orElse: () => null);
+    } else if (q.contains('hindi')) {
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('hindi'), orElse: () => null);
     } else {
       for (final sub in subjects) {
         final sName = (sub['name'] as String).toLowerCase();
@@ -376,14 +388,29 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       }
     }
 
+    final isSubjectChanged = targetSub != null && targetSub['id'] != previousSubjectId;
+
     if (targetSub != null && targetSub['id'] != selectedSubjectId) {
       _selectSubject(targetSub['id'], targetSub['name']);
     }
 
     // 5. Determine whether to Trigger Deep Research OR Filter In-Memory
-    final wantsDeepResearch = q.contains('research') || q.contains('perform') || q.contains('more') || q.contains('dig') || q.contains('generate') || questionClusters.isEmpty;
+    // Trigger deep research if: subject changed, user asked to find/search/research, or bank is empty
+    final hasSearchIntent = q.contains('find') ||
+        q.contains('search') ||
+        q.contains('paper') ||
+        q.contains('get') ||
+        q.contains('fetch') ||
+        q.contains('show me') ||
+        q.contains('research') ||
+        q.contains('perform') ||
+        q.contains('more') ||
+        q.contains('dig') ||
+        q.contains('generate') ||
+        isSubjectChanged ||
+        questionClusters.isEmpty;
 
-    if (wantsDeepResearch) {
+    if (hasSearchIntent) {
       setState(() {
         isSearchingNLP = false;
         activeFilter = null;
