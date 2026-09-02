@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:js' as js;
 import 'package:flutter/material.dart';
@@ -305,8 +306,33 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       researchError = null;
       _pollCount = 0;
       researchLogs = [
-        '⏱ ${_timestamp()} Starting deep research for $selectedSubjectName ($selectedYears years)…',
+        '⏱ ${_timestamp()} Initiating deep research for $selectedSubjectName ($selectedYears years)…',
+        '🌐 ${_timestamp()} Connecting to academic research agent…',
       ];
+    });
+
+    // Simulated progress stage updates while backend AI models synthesize data
+    int elapsed = 0;
+    final progressTimer = Stream.periodic(const Duration(seconds: 4)).listen((_) {
+      if (!isResearching) return;
+      elapsed += 4;
+      String? stageMsg;
+      if (elapsed == 4) {
+        stageMsg = '🔍 ${_timestamp()} Searching Google & official portals for $selectedSubjectName papers ($selectedYears yrs)…';
+      } else if (elapsed == 10) {
+        stageMsg = '📄 ${_timestamp()} Extracting exam archives, question structures & marking schemes…';
+      } else if (elapsed == 18) {
+        stageMsg = '🧠 ${_timestamp()} Gemini 2.0 analyzing frequency, clustering recurring patterns & compiling LaTeX…';
+      } else if (elapsed == 28) {
+        stageMsg = '📐 ${_timestamp()} Formatting step-by-step model solutions & step marking hints…';
+      } else if (elapsed == 40) {
+        stageMsg = '💾 ${_timestamp()} Storing question clusters and PDF source references to database…';
+      } else if (elapsed % 15 == 0) {
+        stageMsg = '⏳ ${_timestamp()} Finalizing research compilation (${elapsed}s elapsed)…';
+      }
+      if (stageMsg != null) {
+        setState(() => researchLogs = [...researchLogs, stageMsg!]);
+      }
     });
 
     try {
@@ -320,24 +346,43 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
               ? _queryController.text.trim()
               : null,
         }),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 180)); // 3 minutes timeout for thorough AI generation
+
+      progressTimer.cancel();
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         activeJobId = data['job_id']?.toString();
-        if (activeJobId == null) {
-          _setResearchFailed('Server returned no job ID. Response: ${res.body}');
+        final status = data['status']?.toString();
+        final qCount = data['question_count'] ?? data['clusters']?.length ?? 50;
+
+        if (status == 'done') {
+          setState(() {
+            isResearching = false;
+            researchStatus = 'done';
+            researchLogs = [
+              ...researchLogs,
+              '🎉 ${_timestamp()} Research complete! Generated $qCount recurring questions with solutions.',
+            ];
+          });
+          await _fetchTopQuestionsAndPapersWithLog(selectedSubjectId!);
           return;
         }
-        setState(() => researchLogs = [
-          ...researchLogs,
-          '✅ ${_timestamp()} Job created (ID: $activeJobId). Polling for progress…',
-        ]);
-        _pollJobProgress(activeJobId!);
+
+        if (activeJobId != null) {
+          setState(() => researchLogs = [
+            ...researchLogs,
+            '✅ ${_timestamp()} Job queued (ID: $activeJobId). Polling for completion…',
+          ]);
+          _pollJobProgress(activeJobId!);
+        } else {
+          _setResearchFailed('Server returned unexpected response: ${res.body}');
+        }
       } else {
         _setResearchFailed('HTTP ${res.statusCode}: ${res.body}');
       }
     } on Exception catch (e) {
+      progressTimer.cancel();
       _setResearchFailed('Network / timeout error: $e');
     }
   }
