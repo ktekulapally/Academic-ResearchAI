@@ -2,9 +2,9 @@
 export async function geminiJson(
   prompt: string,
   apiKey: string,
-  preferredModel = "gemini-2.0-flash"
+  preferredModel = "gemini-1.5-flash"
 ): Promise<Record<string, unknown>> {
-  // 1. Discover available models for this specific API key
+  // 1. Discover available text-capable models for this specific API key
   let availableModels: string[] = [];
   try {
     const listRes = await fetch(
@@ -14,10 +14,18 @@ export async function geminiJson(
       const listData = await listRes.json();
       if (Array.isArray(listData.models)) {
         availableModels = listData.models
-          .filter((m: any) =>
-            Array.isArray(m.supportedGenerationMethods) &&
-            m.supportedGenerationMethods.includes("generateContent")
-          )
+          .filter((m: any) => {
+            const name = String(m.name).toLowerCase();
+            const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+            return (
+              methods.includes("generateContent") &&
+              !name.includes("tts") &&
+              !name.includes("audio") &&
+              !name.includes("imagen") &&
+              !name.includes("embedding") &&
+              !name.includes("2.5")
+            );
+          })
           .map((m: any) => String(m.name).replace(/^models\//, ""));
       }
     } else {
@@ -28,24 +36,22 @@ export async function geminiJson(
     console.warn(`Failed to query models list: ${e}`);
   }
 
-  // Fallback candidates if discovery was empty
+  // Stable production models prioritized first
   const fallbackModels = [
-    preferredModel,
-    "gemini-2.0-flash",
     "gemini-1.5-flash",
     "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-001",
-    "gemini-1.5-flash-002",
+    "gemini-flash-latest",
+    "gemini-2.0-flash",
     "gemini-2.0-flash-exp",
-    "gemini-pro",
+    "gemini-1.5-pro",
   ];
 
-  // Prioritize flash models from discovered list, then fallback models
+  // Candidates: available standard flash models first, then fallbacks
   const candidates = Array.from(
     new Set([
-      ...availableModels.filter((m) => m.includes("flash")),
-      ...availableModels,
+      ...availableModels.filter((m) => m === "gemini-1.5-flash" || m === "gemini-1.5-flash-latest" || m === "gemini-2.0-flash"),
       ...fallbackModels,
+      ...availableModels,
     ])
   );
 
@@ -85,8 +91,8 @@ export async function geminiJson(
       try {
         return JSON.parse(text);
       } catch (parseErr) {
-        // Attempt JSON recovery for truncated payload
-        console.warn(`Model ${m} payload truncated, attempting recovery…`);
+        // Attempt line-based JSON recovery (handles truncated output & LaTeX braces)
+        console.warn(`Model ${m} payload cut off, attempting line-based question recovery…`);
         const repaired = tryRepairTruncatedJson(text);
         if (repaired) return repaired;
         throw parseErr;
@@ -100,17 +106,30 @@ export async function geminiJson(
   throw new Error(`All Gemini model attempts failed. Diagnostic log:\n${allDiagnostics.join("\n")}`);
 }
 
-/** Recovers valid questions from a truncated JSON payload */
+/** Recovers valid questions from a truncated JSON payload by scanning for object boundaries on line endings */
 function tryRepairTruncatedJson(raw: string): Record<string, unknown> | null {
   try {
-    const qIndex = raw.lastIndexOf("}");
-    if (qIndex !== -1) {
-      const trimmed = raw.substring(0, qIndex + 1);
-      const candidate = `${trimmed}\n  ]\n}`;
-      return JSON.parse(candidate);
+    const lines = raw.split("\n");
+    // Scan backwards from the end of the payload for a line containing only "}," or "}"
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (line === "}," || line === "}") {
+        const trimmed = lines.slice(0, i + 1).join("\n").replace(/,\s*$/, "");
+        const candidate = `${trimmed}\n  ]\n}`;
+        try {
+          const parsed = JSON.parse(candidate);
+          if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+            console.log(`Successfully recovered ${parsed.questions.length} complete questions from truncated payload.`);
+            return parsed;
+          }
+        } catch (_) {
+          continue; // Try previous question block
+        }
+      }
     }
   } catch (_) {}
   return null;
 }
+
 
 

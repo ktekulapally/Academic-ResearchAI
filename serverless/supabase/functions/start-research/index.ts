@@ -148,7 +148,7 @@ ${queryPrompt ? `Custom User Filter / Focus: ${queryPrompt}` : ""}
 
 ${searchEvidence ? `WEB SEARCH SIGNALS:\n${searchEvidence}` : ""}
 
-Task: Identify and extract the TOP 30 to 50 most frequently recurring, high-yield exam questions that appeared in the official board examinations over this time period (${fromYear}–${currentYear}). Provide concise, high-scoring, step-by-step solutions with accurate LaTeX equations.
+Task: Identify and extract the TOP 25 most frequently recurring, high-yield exam questions that appeared in the official board examinations over this time period (${fromYear}–${currentYear}). Provide clear, high-scoring, step-by-step model solutions with accurate LaTeX equations.
 
 Return JSON ONLY with this format:
 {
