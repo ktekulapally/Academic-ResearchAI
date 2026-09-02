@@ -80,6 +80,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
   bool isResearching = false;
   List<String> researchLogs = [];
   String? activeJobId;
+  // 'idle' | 'running' | 'done' | 'failed' | 'timeout'
+  String researchStatus = 'idle';
+  String? researchError;
+  int _pollCount = 0;
+  static const int _maxPolls = 75; // 75 × 2s = 150s timeout
 
   // Results State
   late TabController _tabController;
@@ -296,7 +301,12 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     if (selectedSubjectId == null) return;
     setState(() {
       isResearching = true;
-      researchLogs = ['Initiating deep research for $selectedSubjectName (${selectedYears} Years)...'];
+      researchStatus = 'running';
+      researchError = null;
+      _pollCount = 0;
+      researchLogs = [
+        '⏱ ${_timestamp()} Starting deep research for $selectedSubjectName ($selectedYears years)…',
+      ];
     });
 
     try {
@@ -306,67 +316,166 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
         body: jsonEncode({
           'subject_id': selectedSubjectId,
           'years': selectedYears,
-          'query_prompt': _queryController.text.trim().isNotEmpty ? _queryController.text.trim() : null,
+          'query_prompt': _queryController.text.trim().isNotEmpty
+              ? _queryController.text.trim()
+              : null,
         }),
-      );
+      ).timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        activeJobId = data['job_id'];
+        activeJobId = data['job_id']?.toString();
+        if (activeJobId == null) {
+          _setResearchFailed('Server returned no job ID. Response: ${res.body}');
+          return;
+        }
+        setState(() => researchLogs = [
+          ...researchLogs,
+          '✅ ${_timestamp()} Job created (ID: $activeJobId). Polling for progress…',
+        ]);
         _pollJobProgress(activeJobId!);
       } else {
-        setState(() => isResearching = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: Colors.redAccent, content: Text('Research trigger failed: ${res.body}')),
-        );
+        _setResearchFailed('HTTP ${res.statusCode}: ${res.body}');
       }
-    } catch (e) {
-      setState(() => isResearching = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.redAccent, content: Text('Connection error: $e')),
-      );
+    } on Exception catch (e) {
+      _setResearchFailed('Network / timeout error: $e');
     }
   }
 
   Future<void> _pollJobProgress(String jobId) async {
     while (isResearching) {
       await Future.delayed(const Duration(seconds: 2));
+      _pollCount++;
+
+      // ---- Timeout check ----
+      if (_pollCount >= _maxPolls) {
+        _setResearchTimeout();
+        return;
+      }
+
       try {
         final res = await http.get(
           Uri.parse('$apiBase/job-progress?id=$jobId'),
           headers: _headers,
-        );
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          final status = data['status'];
-          final logs = List<String>.from(data['progress'] ?? []);
+        ).timeout(const Duration(seconds: 15));
 
-          setState(() {
-            researchLogs = logs;
-          });
-
-          if (status == 'done') {
-            setState(() => isResearching = false);
-            _fetchTopQuestionsAndPapers(selectedSubjectId!);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                backgroundColor: Color(0xFF10B981),
-                content: Text('🎉 Deep Research & LaTeX Question Bank compiled successfully!'),
-              ),
-            );
-            break;
-          } else if (status == 'failed') {
-            setState(() => isResearching = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(backgroundColor: Colors.redAccent, content: Text('Research failed: ${data['error']}')),
-            );
-            break;
-          }
+        if (res.statusCode != 200) {
+          setState(() => researchLogs = [
+            ...researchLogs,
+            '⚠ ${_timestamp()} Poll returned HTTP ${res.statusCode}. Retrying…',
+          ]);
+          continue;
         }
-      } catch (_) {
-        break;
+
+        final data = jsonDecode(res.body);
+        final status = (data['status'] as String?) ?? 'unknown';
+        final rawLogs = List<String>.from(data['progress'] ?? []);
+
+        setState(() {
+          researchLogs = [
+            '⏱ ${_timestamp()} Status: $status  (poll $_pollCount/$_maxPolls)',
+            ...rawLogs,
+          ];
+        });
+
+        if (status == 'done') {
+          setState(() {
+            isResearching = false;
+            researchStatus = 'done';
+            researchLogs = [
+              ...researchLogs,
+              '🎉 ${_timestamp()} Research complete! Loading results…',
+            ];
+          });
+          await _fetchTopQuestionsAndPapersWithLog(selectedSubjectId!);
+          return;
+        }
+
+        if (status == 'failed') {
+          _setResearchFailed(data['error']?.toString() ?? 'Edge function reported failure');
+          return;
+        }
+      } on Exception catch (e) {
+        setState(() => researchLogs = [
+          ...researchLogs,
+          '⚠ ${_timestamp()} Poll error (will retry): $e',
+        ]);
+        // Don't break — retry next loop
       }
     }
+  }
+
+  Future<void> _fetchTopQuestionsAndPapersWithLog(int subjectId) async {
+    setState(() => isLoadingResults = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$apiBase/top-questions?subject_id=$subjectId&limit=50'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map<String, dynamic>) {
+          setState(() {
+            questionClusters = data['clusters'] ?? [];
+            sourcePapers = data['papers'] ?? [];
+            researchLogs = [
+              ...researchLogs,
+              '📊 ${_timestamp()} Loaded ${questionClusters.length} questions & ${sourcePapers.length} sources.',
+            ];
+          });
+        } else if (data is List) {
+          setState(() {
+            questionClusters = data;
+            researchLogs = [
+              ...researchLogs,
+              '📊 ${_timestamp()} Loaded ${questionClusters.length} questions.',
+            ];
+          });
+        }
+      } else {
+        setState(() => researchLogs = [
+          ...researchLogs,
+          '❌ ${_timestamp()} Failed to load results: HTTP ${res.statusCode}',
+        ]);
+      }
+    } on Exception catch (e) {
+      setState(() => researchLogs = [
+        ...researchLogs,
+        '❌ ${_timestamp()} Error loading results: $e',
+      ]);
+    } finally {
+      setState(() => isLoadingResults = false);
+    }
+  }
+
+  void _setResearchFailed(String error) {
+    setState(() {
+      isResearching = false;
+      researchStatus = 'failed';
+      researchError = error;
+      researchLogs = [
+        ...researchLogs,
+        '❌ ${_timestamp()} FAILED: $error',
+      ];
+    });
+  }
+
+  void _setResearchTimeout() {
+    setState(() {
+      isResearching = false;
+      researchStatus = 'timeout';
+      researchError = 'Research timed out after ${_maxPolls * 2} seconds. The AI agent may still be running — try refreshing in a minute.';
+      researchLogs = [
+        ...researchLogs,
+        '⏰ ${_timestamp()} TIMEOUT: No response after ${_maxPolls * 2}s.',
+      ];
+    });
+  }
+
+  String _timestamp() {
+    final now = DateTime.now();
+    return '${now.hour.toString().padLeft(2, "0")}:${now.minute.toString().padLeft(2, "0")}:${now.second.toString().padLeft(2, "0")}';
   }
 
   // Ask AI Tutor Modal
@@ -545,12 +654,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
 
             const SizedBox(height: 20),
 
-            // 4. Research Progress Overlay (if active)
-            if (isResearching) _buildProgressOverlay(),
-
-            const SizedBox(height: 16),
-
-            // 5. Dual Tabs: Question Bank (LaTeX Solutions) & Downloadable Papers Hub
+            // 4. Results: Live Research Terminal + Question Bank + Sources
             _buildResultsSection(isDesktop),
           ],
         ),
@@ -871,36 +975,106 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     );
   }
 
-  Widget _buildProgressOverlay() {
+  Widget _buildResearchTerminal() {
+    final statusColor = researchStatus == 'done'
+        ? const Color(0xFF10B981)
+        : researchStatus == 'failed' || researchStatus == 'timeout'
+            ? const Color(0xFFEF4444)
+            : const Color(0xFF8B5CF6);
+
+    final statusIcon = researchStatus == 'done'
+        ? Icons.check_circle
+        : researchStatus == 'failed'
+            ? Icons.error
+            : researchStatus == 'timeout'
+                ? Icons.timer_off
+                : Icons.radar;
+
+    final statusLabel = researchStatus == 'done'
+        ? '✅ Research Complete'
+        : researchStatus == 'failed'
+            ? '❌ Research Failed'
+            : researchStatus == 'timeout'
+                ? '⏰ Research Timed Out'
+                : '🔬 AI Agent Deep Researching…';
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1B4B),
+        color: const Color(0xFF0A0F1E),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF8B5CF6)),
+        border: Border.all(color: statusColor.withOpacity(0.6), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
-              Icon(Icons.radar, color: Color(0xFF8B5CF6), size: 20),
-              SizedBox(width: 8),
-              Text(
-                'AI Agent Live Deep Researching…',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...researchLogs.map(
-            (log) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Text(
-                '• $log',
-                style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1), fontFamily: 'monospace'),
-              ),
+          // ── Terminal header bar ──────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.12),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             ),
+            child: Row(children: [
+              Icon(statusIcon, color: statusColor, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(statusLabel, style: TextStyle(fontWeight: FontWeight.bold, color: statusColor, fontSize: 13))),
+              if (isResearching)
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: statusColor)),
+              if (!isResearching && researchStatus != 'idle')
+                TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: statusColor, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                  icon: const Icon(Icons.refresh, size: 14),
+                  label: const Text('Re-Run', style: TextStyle(fontSize: 12)),
+                  onPressed: _startDeepResearch,
+                ),
+            ]),
+          ),
+
+          // ── Error/Timeout banner ────────────────────────────────
+          if (researchError != null)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.5)),
+              ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.info_outline, size: 14, color: Color(0xFFEF4444)),
+                const SizedBox(width: 8),
+                Expanded(child: Text(researchError!, style: const TextStyle(fontSize: 12, color: Color(0xFFEF4444), height: 1.4))),
+              ]),
+            ),
+
+          // ── Live log terminal ───────────────────────────────────
+          Container(
+            height: 200,
+            padding: const EdgeInsets.all(12),
+            child: researchLogs.isEmpty
+                ? const Center(child: Text('Waiting for first log entry…', style: TextStyle(color: Color(0xFF4B5563), fontSize: 12)))
+                : ListView.builder(
+                    reverse: true,
+                    itemCount: researchLogs.length,
+                    itemBuilder: (ctx, i) {
+                      final log = researchLogs[researchLogs.length - 1 - i];
+                      final logColor = log.startsWith('❌') || log.startsWith('⏰')
+                          ? const Color(0xFFEF4444)
+                          : log.startsWith('✅') || log.startsWith('🎉') || log.startsWith('📊')
+                              ? const Color(0xFF10B981)
+                              : log.startsWith('⚠')
+                                  ? const Color(0xFFF59E0B)
+                                  : const Color(0xFF94A3B8);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1.5),
+                        child: Text(
+                          log,
+                          style: TextStyle(fontSize: 11.5, color: logColor, fontFamily: 'monospace', height: 1.4),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -908,16 +1082,24 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
   }
 
   Widget _buildResultsSection(bool isDesktop) {
-    if (questionClusters.isEmpty && sourcePapers.isEmpty && !isLoadingResults) {
+    // Show terminal whenever there are logs (running, done, failed, or timeout)
+    final showTerminal = researchLogs.isNotEmpty || isResearching;
+
+    if (questionClusters.isEmpty && sourcePapers.isEmpty && !isLoadingResults && !showTerminal) {
       return _buildEmptyState('Select a subject above and click "Start Deep Research" to harvest top recurring questions, model solutions & research sources.');
     }
+
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Live Research Terminal (always visible when research ran) ─
+        if (showTerminal) _buildResearchTerminal(),
+
         // ── Download Full Exam Kit Banner ──────────────────────────
         if (questionClusters.isNotEmpty)
           Container(
+
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
