@@ -908,146 +908,296 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
   }
 
   Widget _buildResultsSection(bool isDesktop) {
+    if (questionClusters.isEmpty && sourcePapers.isEmpty && !isLoadingResults) {
+      return _buildEmptyState('Select a subject above and click "Start Deep Research" to harvest top recurring questions, model solutions & research sources.');
+    }
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Download Full Exam Kit Banner (Folder / Bundle)
-        if (questionClusters.isNotEmpty || sourcePapers.isNotEmpty)
+        // ── Download Full Exam Kit Banner ──────────────────────────
+        if (questionClusters.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E1B4B), Color(0xFF131B2E)],
-              ),
+              gradient: const LinearGradient(colors: [Color(0xFF1E1B4B), Color(0xFF131B2E)]),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
             ),
-            child: LayoutBuilder(
-              builder: (ctx, constraints) {
-                final isNarrow = constraints.maxWidth < 650;
-                return isNarrow
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.folder_special, color: Color(0xFFF59E0B), size: 24),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Complete Exam Kit (${selectedSubjectName ?? "Subject"} ${DateTime.now().year - selectedYears + 1}–${DateTime.now().year})',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            icon: const Icon(Icons.download_for_offline, size: 18),
-                            label: const Text('Download All Papers & Booklet', style: TextStyle(fontWeight: FontWeight.bold)),
-                            onPressed: _downloadFullExamKit,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          const Icon(Icons.folder_special, color: Color(0xFFF59E0B), size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Complete Exam Kit: ${selectedSubjectName ?? "Subject"} (${DateTime.now().year - selectedYears + 1}–${DateTime.now().year})',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-                                ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'Download all 50 recurring questions, LaTeX solutions & paper references in a single offline package.',
-                                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            icon: const Icon(Icons.download_for_offline, size: 18),
-                            label: const Text('Download All Papers & Booklet', style: TextStyle(fontWeight: FontWeight.bold)),
-                            onPressed: _downloadFullExamKit,
-                          ),
-                        ],
-                      );
-              },
-            ),
+            child: LayoutBuilder(builder: (ctx, constraints) {
+              final isNarrow = constraints.maxWidth < 650;
+              final kitLabel = 'Complete Exam Kit: ${selectedSubjectName ?? "Subject"} (${DateTime.now().year - selectedYears + 1}–${DateTime.now().year})';
+              return isNarrow
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Row(children: [
+                        const Icon(Icons.folder_special, color: Color(0xFFF59E0B), size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(kitLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white))),
+                      ]),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        icon: const Icon(Icons.download_for_offline, size: 18),
+                        label: const Text('Download All Papers & Booklet', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: _downloadFullExamKit,
+                      ),
+                    ])
+                  : Row(children: [
+                      const Icon(Icons.folder_special, color: Color(0xFFF59E0B), size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(kitLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                        const SizedBox(height: 2),
+                        const Text('Download all recurring questions, LaTeX solutions & paper references in a single offline package.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                      ])),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        icon: const Icon(Icons.download_for_offline, size: 18),
+                        label: const Text('Download All Papers & Booklet', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: _downloadFullExamKit,
+                      ),
+                    ]);
+            }),
           ),
 
-        // Tabs Header
+        // ── Tab Bar ───────────────────────────────────────────────
         Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF131B2E),
-            borderRadius: BorderRadius.circular(12),
-          ),
+          decoration: BoxDecoration(color: const Color(0xFF131B2E), borderRadius: BorderRadius.circular(12)),
           child: TabBar(
             controller: _tabController,
             indicatorColor: const Color(0xFF8B5CF6),
             labelColor: const Color(0xFF8B5CF6),
             unselectedLabelColor: const Color(0xFF94A3B8),
             tabs: [
-              Tab(
-                icon: const Icon(Icons.auto_stories, size: 18),
-                text: 'Top Recurring Questions (${questionClusters.length})',
-              ),
-              Tab(
-                icon: const Icon(Icons.download, size: 18),
-                text: 'Downloadable Papers Hub (${sourcePapers.length})',
-              ),
+              Tab(icon: const Icon(Icons.auto_stories, size: 18), text: 'Top Recurring Questions (${questionClusters.length})'),
+              Tab(icon: const Icon(Icons.travel_explore, size: 18), text: 'Research Sources (${sourcePapers.length})'),
             ],
           ),
         ),
 
         const SizedBox(height: 16),
 
-        // Tabs Content
-        SizedBox(
-          height: 600,
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              // Tab 1: Question Bank
-              isLoadingResults
-                  ? const Center(child: CircularProgressIndicator())
-                  : questionClusters.isEmpty
-                      ? _buildEmptyState('No recurring questions yet. Click "Start Deep Research" above to harvest questions!')
-                      : ListView.builder(
-                          itemCount: questionClusters.length,
-                          itemBuilder: (ctx, idx) => _buildQuestionClusterCard(questionClusters[idx], idx + 1),
-                        ),
+        // ── Tab Content — NO fixed height, scrolls with page ──────
+        isLoadingResults
+            ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+            : AnimatedBuilder(
+                animation: _tabController,
+                builder: (ctx, _) {
+                  if (_tabController.index == 0) {
+                    // ── Tab 1: Question Bank ───────────────────────
+                    if (questionClusters.isEmpty) {
+                      return _buildEmptyState('No recurring questions yet. Click "Start Deep Research" above!');
+                    }
+                    return Column(
+                      children: [
+                        for (int i = 0; i < questionClusters.length; i++)
+                          _buildQuestionClusterCard(questionClusters[i], i + 1),
+                      ],
+                    );
+                  } else {
+                    // ── Tab 2: Research Sources ────────────────────
+                    return _buildResearchSourcesPanel();
+                  }
+                },
+              ),
+      ],
+    );
+  }
 
-              // Tab 2: Downloadable Papers Hub
-              isLoadingResults
-                  ? const Center(child: CircularProgressIndicator())
-                  : sourcePapers.isEmpty
-                      ? _buildEmptyState('No PDF papers harvested yet for this subject.')
-                      : ListView.builder(
-                          itemCount: sourcePapers.length,
-                          itemBuilder: (ctx, idx) => _buildSourcePaperCard(sourcePapers[idx]),
-                        ),
+
+
+  /// Research Sources Panel — shows all web references used during AI research
+  /// with domain favicon, title, URL, and a "Dig Deeper" button per source.
+  Widget _buildResearchSourcesPanel() {
+    if (sourcePapers.isEmpty) {
+      return _buildEmptyState('No research sources yet.\nClick "Start Deep Research" above to let the AI agent search live web sources.');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header explanation
+        Container(
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF1E293B)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.travel_explore, size: 18, color: Color(0xFF06B6D4)),
+                const SizedBox(width: 8),
+                const Text('Live Web Research Trail', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+              ]),
+              const SizedBox(height: 6),
+              const Text(
+                'These are the official sources the AI agent searched and analyzed to build your question bank. Review them to judge research depth — and click "Dig Deeper" on any source to re-run focused research on that specific paper or topic.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), height: 1.5),
+              ),
+            ],
+          ),
+        ),
+
+        // Source cards
+        for (final paper in sourcePapers)
+          _buildResearchSourceCard(paper),
+
+        // Dig Deeper from scratch CTA
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1B4B),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('🔁 Want even deeper research?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+              const SizedBox(height: 6),
+              Text(
+                'The AI analyzed ${sourcePapers.length} source${sourcePapers.length == 1 ? "" : "s"} this round. You can extend the analysis horizon or run a new deep research pass to find more patterns and sources.',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B5CF6),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.rocket_launch, size: 16),
+                    label: const Text('Re-Run Deep Research', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: isResearching ? null : _startDeepResearch,
+                  ),
+                ),
+              ]),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildResearchSourceCard(dynamic paper) {
+    final title = (paper['title'] ?? 'Research Source').toString();
+    final year = paper['year'] ?? DateTime.now().year;
+    final examType = (paper['exam_type'] ?? 'Web Source').toString();
+    final paperUrl = (paper['paper_url'] ?? '').toString();
+    final isDirectPdf = paperUrl.toLowerCase().contains('.pdf');
+
+    // Extract readable domain from URL
+    String domain = 'Web Source';
+    try {
+      final uri = Uri.parse(paperUrl);
+      domain = uri.host.replaceFirst('www.', '');
+    } catch (_) {}
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Domain badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDirectPdf ? const Color(0xFFEF4444).withOpacity(0.15) : const Color(0xFF06B6D4).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isDirectPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4), width: 0.5),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(isDirectPdf ? Icons.picture_as_pdf : Icons.language, size: 14, color: isDirectPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4)),
+                    const SizedBox(width: 5),
+                    Text(isDirectPdf ? 'PDF' : domain, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDirectPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4))),
+                  ]),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.white)),
+                      const SizedBox(height: 3),
+                      Text('$year • $examType', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // URL chip
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B0F19),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Text(
+                paperUrl.length > 80 ? '${paperUrl.substring(0, 80)}…' : paperUrl,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontFamily: 'monospace'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Action buttons row
+            Row(children: [
+              // Open source
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: isDirectPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4)),
+                  foregroundColor: isDirectPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: Icon(isDirectPdf ? Icons.download : Icons.open_in_new, size: 14),
+                label: Text(isDirectPdf ? 'Download PDF' : 'Open Source', style: const TextStyle(fontSize: 12)),
+                onPressed: () => _openOrDownloadUrl(paperUrl, title),
+              ),
+              const SizedBox(width: 8),
+              // Dig Deeper from this source
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.radar, size: 14),
+                label: const Text('Dig Deeper', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                onPressed: isResearching
+                    ? null
+                    : () {
+                        _queryController.text = 'Focus on: $title ($year)';
+                        _tabController.animateTo(0);
+                        _startDeepResearch();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFF8B5CF6),
+                            content: Text('🔬 Re-searching focused on "$title"…'),
+                          ),
+                        );
+                      },
+              ),
+            ]),
+          ],
+        ),
+      ),
     );
   }
 
