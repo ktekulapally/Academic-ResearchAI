@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 
 // ========== CONFIGURATION ==========
 const String kDefaultApiBase = 'https://rzgwoubtuyrpmwsezhqw.supabase.co/functions/v1';
-const String kDefaultAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+const String kDefaultAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6Z3dvdWJ0dXlycG13c2V6aHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNjgwNjEsImV4cCI6MjEwMzg0NDA2MX0.RhlE5RDZ2P7pn4NTYfP8klhTTxDYvvykK0cKQLXpV1w';
+
 
 void main() {
   runApp(const AcademicResearchApp());
@@ -392,7 +393,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               setState(() {
                 apiBase = baseController.text.trim();
@@ -549,100 +553,152 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
   }
 
   Widget _buildHierarchyFilters() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Standard Chips
-        const Text(
-          '1. Select Academic Board & Class',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
-        ),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131B2E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1E293B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Step 1: Board & Class
+          Row(
+            children: const [
+              Icon(Icons.school, size: 18, color: Color(0xFF8B5CF6)),
+              SizedBox(width: 8),
+              Text(
+                '1. Academic Board & Class',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: standards.map((s) {
               final isSelected = s['id'] == selectedStandardId;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(s['name']),
-                  selected: isSelected,
-                  onSelected: (_) => _selectStandard(s['id']),
-                  selectedColor: const Color(0xFF8B5CF6).withOpacity(0.3),
-                  checkmarkColor: const Color(0xFF8B5CF6),
-                  backgroundColor: const Color(0xFF131B2E),
-                  side: BorderSide(
-                    color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFF1E293B),
+              return ChoiceChip(
+                avatar: Icon(
+                  isSelected ? Icons.check_circle : Icons.school_outlined,
+                  size: 16,
+                  color: isSelected ? Colors.white : const Color(0xFF8B5CF6),
+                ),
+                label: Text(
+                  s['name'],
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                   ),
+                ),
+                selected: isSelected,
+                onSelected: (_) => _selectStandard(s['id']),
+                selectedColor: const Color(0xFF8B5CF6),
+                backgroundColor: const Color(0xFF0B0F19),
+                side: BorderSide(
+                  color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFF334155),
                 ),
               );
             }).toList(),
           ),
-        ),
 
-        const SizedBox(height: 12),
-
-        // Stream Chips
-        if (streams.isNotEmpty) ...[
-          const Text(
-            '2. Select Stream / Group',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
-          ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+          if (streams.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(color: Color(0xFF1E293B), height: 1),
+            ),
+            // Step 2: Stream / Group
+            Row(
+              children: const [
+                Icon(Icons.category, size: 18, color: Color(0xFF06B6D4)),
+                SizedBox(width: 8),
+                Text(
+                  '2. Stream / Group',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: streams.map((st) {
                 final isSelected = st['id'] == selectedStreamId;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(st['name']),
-                    selected: isSelected,
-                    onSelected: (_) => _selectStream(st['id']),
-                    selectedColor: const Color(0xFF06B6D4).withOpacity(0.3),
-                    backgroundColor: const Color(0xFF131B2E),
-                    side: BorderSide(
-                      color: isSelected ? const Color(0xFF06B6D4) : const Color(0xFF1E293B),
+                return ChoiceChip(
+                  avatar: Icon(
+                    isSelected ? Icons.check_circle : Icons.layers_outlined,
+                    size: 16,
+                    color: isSelected ? Colors.white : const Color(0xFF06B6D4),
+                  ),
+                  label: Text(
+                    st['name'],
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     ),
+                  ),
+                  selected: isSelected,
+                  onSelected: (_) => _selectStream(st['id']),
+                  selectedColor: const Color(0xFF06B6D4),
+                  backgroundColor: const Color(0xFF0B0F19),
+                  side: BorderSide(
+                    color: isSelected ? const Color(0xFF06B6D4) : const Color(0xFF334155),
                   ),
                 );
               }).toList(),
             ),
-          ),
-          const SizedBox(height: 12),
-        ],
+          ],
 
-        // Subject Grid / Chips
-        if (subjects.isNotEmpty) ...[
-          const Text(
-            '3. Select Target Subject',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: subjects.map((sub) {
-              final isSelected = sub['id'] == selectedSubjectId;
-              return ActionChip(
-                avatar: Icon(
-                  Icons.book,
-                  size: 16,
-                  color: isSelected ? Colors.white : const Color(0xFF10B981),
+          if (subjects.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(color: Color(0xFF1E293B), height: 1),
+            ),
+            // Step 3: Target Subject
+            Row(
+              children: const [
+                Icon(Icons.menu_book, size: 18, color: Color(0xFF10B981)),
+                SizedBox(width: 8),
+                Text(
+                  '3. Target Subject',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
-                label: Text(sub['name']),
-                backgroundColor: isSelected ? const Color(0xFF10B981) : const Color(0xFF131B2E),
-                side: BorderSide(
-                  color: isSelected ? const Color(0xFF10B981) : const Color(0xFF1E293B),
-                ),
-                onPressed: () => _selectSubject(sub['id'], sub['name']),
-              );
-            }).toList(),
-          ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: subjects.map((sub) {
+                final isSelected = sub['id'] == selectedSubjectId;
+                return ChoiceChip(
+                  avatar: Icon(
+                    isSelected ? Icons.check_circle : Icons.book,
+                    size: 16,
+                    color: isSelected ? Colors.white : const Color(0xFF10B981),
+                  ),
+                  label: Text(
+                    sub['name'],
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    ),
+                  ),
+                  selected: isSelected,
+                  onSelected: (_) => _selectSubject(sub['id'], sub['name']),
+                  selectedColor: const Color(0xFF10B981),
+                  backgroundColor: const Color(0xFF0B0F19),
+                  side: BorderSide(
+                    color: isSelected ? const Color(0xFF10B981) : const Color(0xFF334155),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -654,52 +710,109 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF1E293B)),
       ),
-      child: Row(
-        children: [
-          // Year Selection Pills
-          const Text('Analysis Horizon: ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-          const SizedBox(width: 8),
-          ...[5, 7, 10].map((y) {
-            final isSel = selectedYears == y;
-            return Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: ChoiceChip(
-                label: Text('$y Yrs'),
-                selected: isSel,
-                onSelected: (_) => setState(() => selectedYears = y),
-                selectedColor: const Color(0xFFF59E0B).withOpacity(0.3),
-                backgroundColor: const Color(0xFF0B0F19),
-                side: BorderSide(
-                  color: isSel ? const Color(0xFFF59E0B) : const Color(0xFF1E293B),
-                ),
-              ),
-            );
-          }),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 650;
+          return isNarrow
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.history, size: 18, color: Color(0xFFF59E0B)),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Analysis Horizon:',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 6,
+                            alignment: WrapAlignment.end,
+                            children: [5, 7, 10].map((y) => _buildYearChip(y)).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B5CF6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: isResearching
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.rocket_launch, size: 18),
+                      label: Text(
+                        isResearching ? 'Deep Researching…' : 'Start Deep Research',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      onPressed: isResearching || selectedSubjectId == null ? null : _startDeepResearch,
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    const Icon(Icons.history, size: 18, color: Color(0xFFF59E0B)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Analysis Horizon: ',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 10),
+                    ...[5, 7, 10].map((y) => Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: _buildYearChip(y),
+                        )),
+                    const Spacer(),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B5CF6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: isResearching
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.rocket_launch, size: 18),
+                      label: Text(
+                        isResearching ? 'Deep Researching…' : 'Start Deep Research',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      onPressed: isResearching || selectedSubjectId == null ? null : _startDeepResearch,
+                    ),
+                  ],
+                );
+        },
+      ),
+    );
+  }
 
-          const Spacer(),
-
-          // Start Deep Research Button
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B5CF6),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            icon: isResearching
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.rocket_launch, size: 18),
-            label: Text(
-              isResearching ? 'Deep Researching…' : 'Start Deep Research',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            onPressed: isResearching || selectedSubjectId == null ? null : _startDeepResearch,
-          ),
-        ],
+  Widget _buildYearChip(int y) {
+    final isSel = selectedYears == y;
+    return ChoiceChip(
+      label: Text('$y Yrs'),
+      selected: isSel,
+      onSelected: (_) => setState(() => selectedYears = y),
+      selectedColor: const Color(0xFFF59E0B),
+      backgroundColor: const Color(0xFF0B0F19),
+      labelStyle: TextStyle(
+        color: isSel ? Colors.black : const Color(0xFFCBD5E1),
+        fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+      ),
+      side: BorderSide(
+        color: isSel ? const Color(0xFFF59E0B) : const Color(0xFF334155),
       ),
     );
   }
