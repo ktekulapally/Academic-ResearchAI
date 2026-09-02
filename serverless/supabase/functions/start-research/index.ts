@@ -148,7 +148,7 @@ ${queryPrompt ? `Custom User Filter / Focus: ${queryPrompt}` : ""}
 
 ${searchEvidence ? `WEB SEARCH SIGNALS:\n${searchEvidence}` : ""}
 
-Task: Identify and extract the TOP 50 most frequently recurring, high-yield exam questions that appeared in the official board examinations over this time period (${fromYear}–${currentYear}).
+Task: Identify and extract the TOP 30 to 50 most frequently recurring, high-yield exam questions that appeared in the official board examinations over this time period (${fromYear}–${currentYear}). Provide concise, high-scoring, step-by-step solutions with accurate LaTeX equations.
 
 Return JSON ONLY with this format:
 {
@@ -160,7 +160,7 @@ Return JSON ONLY with this format:
       "marks_hint": "5 Marks" or "4 Marks" or "8 Marks" or "2 Marks",
       "question_type": "Derivation" or "Numerical" or "Theory" or "Short Answer",
       "concept_tags": ["Chapter/Topic", "Subtopic"],
-      "solution_markdown": "Complete, high-scoring step-by-step model answer. Use LaTeX formatting for all mathematical equations (e.g. $E = \\frac{1}{4\\pi\\varepsilon_0} \\frac{q}{r^2}$). Mention marking scheme breakdown and common student pitfalls."
+      "solution_markdown": "Complete, high-scoring step-by-step model answer. Use concise steps with LaTeX formatting for mathematical and chemical formulas (e.g. $E = \\frac{1}{4\\pi\\varepsilon_0} \\frac{q}{r^2}$). Mention marking scheme breakdown."
     }
   ],
   "sample_papers": [
