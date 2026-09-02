@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:js' as js;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -1017,6 +1018,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     final year = paper['year'] ?? 2024;
     final examType = paper['exam_type'] ?? 'Annual Public Exam';
     final fileSize = paper['file_size'] ?? '1.6 MB';
+    final paperUrl = paper['paper_url'] ?? '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1041,13 +1043,29 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
           icon: const Icon(Icons.file_download_outlined, size: 16),
           label: const Text('Download PDF'),
           onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Downloading $title ($fileSize)...')),
-            );
+            if (paperUrl.toString().isNotEmpty) {
+              _openOrDownloadUrl(paperUrl.toString(), '$title.pdf');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFF10B981),
+                  content: Text('Opening & downloading $title...'),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('PDF link not available for this paper.')),
+              );
+            }
           },
         ),
       ),
     );
+  }
+
+  void _openOrDownloadUrl(String url, String filename) {
+    try {
+      js.context.callMethod('open', [url, '_blank']);
+    } catch (_) {}
   }
 
   Widget _buildEmptyState(String msg) {
