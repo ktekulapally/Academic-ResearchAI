@@ -1084,10 +1084,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
                   ],
                 ),
                 const SizedBox(height: 10),
-                SelectableText(
-                  solution ?? 'Solution is compiling in the background...',
-                  style: const TextStyle(fontSize: 13, height: 1.5, color: Color(0xFFE2E8F0)),
-                ),
+                _buildFormattedSolutionWidget(solution ?? 'Solution is compiling in the background...'),
               ],
             ),
           ),
@@ -1184,13 +1181,34 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     .badge-amber { background: #fef3c7; color: #92400e; }
     .badge-cyan { background: #cffafe; color: #155e75; }
     .badge-green { background: #d1fae5; color: #065f46; }
-    .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    .question-title { font-size: 16px; font-weight: 600; color: #0f172a; margin-bottom: 8px; }
-    .solution-box { background: #f1f5f9; border-left: 4px solid #8b5cf6; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-top: 12px; font-size: 14px; white-space: pre-wrap; font-family: inherit; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .question-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+    .solution-box { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #8b5cf6; padding: 16px 20px; border-radius: 0 10px 10px 0; margin-top: 12px; font-size: 14px; }
+    .sol-header { font-size: 14px; font-weight: bold; color: #6b21a8; margin-bottom: 10px; }
+    h2 { font-size: 20px; color: #1e1b4b; margin-top: 24px; margin-bottom: 12px; }
+    h3 { font-size: 16px; color: #5b21b6; margin-top: 14px; margin-bottom: 6px; border-bottom: 1px solid #e9d5ff; padding-bottom: 4px; }
+    h4 { font-size: 14px; color: #0369a1; margin-top: 12px; margin-bottom: 4px; }
+    p { margin: 6px 0; }
+    ul { margin: 6px 0; padding-left: 20px; }
+    li { margin-bottom: 4px; }
     .print-btn { background: #8b5cf6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; float: right; }
     .papers-list a { display: inline-block; background: #10b981; color: white; padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 13px; margin: 4px; }
-    @media print { .print-btn { display: none; } body { background: white; padding: 0; } }
+    @media print { .print-btn { display: none; } body { background: white; padding: 0; } .card { box-shadow: none; border-color: #cbd5e1; page-break-inside: avoid; } }
   </style>
+  <!-- MathJax Configuration for Chemistry & Math formulas -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\$', '\$'], ['\\\\(', '\\\\)']],
+        displayMath: [['\$\$', '\$\$'], ['\\\\[', '\\\\]']],
+        processEscapes: true
+      },
+      chtml: {
+        scale: 1.05
+      }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
 <body>
   <div class="header">
@@ -1223,8 +1241,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       <span class="badge badge-green">$qType</span>
       <span style="font-size: 12px; color: #64748b;">Years: $years</span>
     </div>
-    <div class="question-title">${_escapeHtml(text)}</div>
-    <div class="solution-box"><strong>📖 Step-by-Step Model Solution:</strong>\n${_escapeHtml(sol)}</div>
+    <div class="question-title">${_formatMarkdownToHtml(text)}</div>
+    <div class="solution-box">
+      <div class="sol-header">📖 Step-by-Step Model Solution:</div>
+      ${_formatMarkdownToHtml(sol)}
+    </div>
   </div>
 ''');
     }
@@ -1261,6 +1282,114 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
         content: Text('Downloaded Exam Kit: $safeFileName.html (Open to view or Save as PDF)!'),
       ),
     );
+  }
+
+  String _formatMarkdownToHtml(String md) {
+    if (md.isEmpty) return '<p>No solution provided.</p>';
+
+    var html = md;
+    html = html.replaceAllMapped(RegExp(r'^### (.+)$', multiLine: true), (m) => '<h3>${m[1]}</h3>');
+    html = html.replaceAllMapped(RegExp(r'^#### (.+)$', multiLine: true), (m) => '<h4>${m[1]}</h4>');
+    html = html.replaceAllMapped(RegExp(r'^## (.+)$', multiLine: true), (m) => '<h2>${m[1]}</h2>');
+    html = html.replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => '<strong>${m[1]}</strong>');
+    html = html.replaceAllMapped(RegExp(r'^[*-] (.+)$', multiLine: true), (m) => '<li>${m[1]}</li>');
+    html = html.replaceAllMapped(RegExp(r'^\d+\.\s+(.+)$', multiLine: true), (m) => '<li style="list-style-type: decimal;">${m[1]}</li>');
+
+    final lines = html.split('\n');
+    final processed = <String>[];
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      if (trimmed.startsWith('<h') || trimmed.startsWith('<li') || trimmed.startsWith(r'$$')) {
+        processed.add(trimmed);
+      } else {
+        processed.add('<p>$trimmed</p>');
+      }
+    }
+    return processed.join('\n');
+  }
+
+  Widget _buildFormattedSolutionWidget(String raw) {
+    final lines = raw.split('\n');
+    final widgets = <Widget>[];
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      if (trimmed.startsWith('### ')) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 4),
+          child: Text(
+            trimmed.replaceFirst('### ', ''),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFC084FC)),
+          ),
+        ));
+      } else if (trimmed.startsWith('#### ')) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 2),
+          child: Text(
+            trimmed.replaceFirst('#### ', ''),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF38BDF8)),
+          ),
+        ));
+      } else if (trimmed.startsWith(r'$$') && trimmed.endsWith(r'$$')) {
+        final formula = trimmed.replaceAll(r'$$', '').trim();
+        widgets.add(Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF334155)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.functions, size: 16, color: Color(0xFFF59E0B)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SelectableText(
+                  formula,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: Color(0xFFFDE68A)),
+                ),
+              ),
+            ],
+          ),
+        ));
+      } else if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+        final cleanBullet = _stripMarkdownChars(trimmed.substring(2));
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('• ', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 14, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: SelectableText(
+                  cleanBullet,
+                  style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFFCBD5E1)),
+                ),
+              ),
+            ],
+          ),
+        ));
+      } else {
+        final cleanText = _stripMarkdownChars(trimmed);
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: SelectableText(
+            cleanText,
+            style: const TextStyle(fontSize: 13, height: 1.5, color: Color(0xFFE2E8F0)),
+          ),
+        ));
+      }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: widgets);
+  }
+
+  String _stripMarkdownChars(String text) {
+    return text.replaceAll(r'**', '').replaceAll(r'__', '').replaceAll(r'###', '').replaceAll(r'####', '');
   }
 
   String _escapeHtml(String text) {
