@@ -215,51 +215,80 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     }
   }
 
-  // NLP Query Decomposition Agent
+  // Smart client-side NLP query parser — works offline, no extra edge function needed
   Future<void> _handleNLPQuery(String query) async {
     if (query.trim().isEmpty) return;
     setState(() => isSearchingNLP = true);
 
-    try {
-      final res = await http.post(
-        Uri.parse('$apiBase/parse-query'),
-        headers: _headers,
-        body: jsonEncode({'query': query}),
-      );
+    final q = query.toLowerCase();
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final stdId = data['detected_standard_id'];
-        final subId = data['detected_subject_id'];
-        final years = data['years'];
-
-        if (years != null && [5, 7, 10].contains(years)) {
-          setState(() => selectedYears = years);
-        }
-
-        if (stdId != null) {
-          await _selectStandard(stdId);
-        }
-
-        if (subId != null) {
-          final subName = data['detected_subject_name'] ?? 'Subject';
-          _selectSubject(subId, subName);
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF8B5CF6),
-            content: Text(data['search_summary'] ?? 'Search filter applied!'),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.redAccent, content: Text('NLP Parser error: $e')),
-      );
-    } finally {
-      setState(() => isSearchingNLP = false);
+    // ---- Detect years horizon ----
+    if (q.contains('10 year') || q.contains('10year') || q.contains('last 10')) {
+      setState(() => selectedYears = 10);
+    } else if (q.contains('7 year') || q.contains('7year') || q.contains('last 7')) {
+      setState(() => selectedYears = 7);
+    } else if (q.contains('5 year') || q.contains('5year') || q.contains('last 5')) {
+      setState(() => selectedYears = 5);
     }
+
+    // ---- Detect board/standard by keyword ----
+    int? matchedStdId;
+    for (final s in standards) {
+      final name = (s['name'] as String).toLowerCase();
+      if (q.contains(name) || name.split(' ').any((w) => w.length > 3 && q.contains(w))) {
+        matchedStdId = s['id'];
+        break;
+      }
+    }
+
+    if (matchedStdId != null && matchedStdId != selectedStandardId) {
+      await _selectStandard(matchedStdId);
+    }
+
+    // ---- Detect subject by keyword in current subjects list ----
+    int? matchedSubId;
+    String? matchedSubName;
+    for (final sub in subjects) {
+      final name = (sub['name'] as String).toLowerCase();
+      if (q.contains(name) || name.split(' ').any((w) => w.length > 3 && q.contains(w))) {
+        matchedSubId = sub['id'];
+        matchedSubName = sub['name'];
+        break;
+      }
+    }
+
+    if (matchedSubId != null) {
+      _selectSubject(matchedSubId, matchedSubName!);
+      setState(() => isSearchingNLP = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF8B5CF6),
+          content: Text('✅ Showing results for "$matchedSubName" · ${selectedYears} year analysis'),
+        ),
+      );
+      return;
+    }
+
+    // ---- If subject not matched yet, auto-trigger deep research with the query as prompt ----
+    if (selectedSubjectId != null) {
+      setState(() => isSearchingNLP = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF8B5CF6),
+          content: Text('🔬 Launching deep research with your query…'),
+        ),
+      );
+      _startDeepResearch();
+      return;
+    }
+
+    setState(() => isSearchingNLP = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Color(0xFFF59E0B),
+        content: Text('👆 Please select a Board & Subject first, then use AI search to refine results.'),
+      ),
+    );
   }
 
   // Trigger Deep Research
@@ -448,28 +477,52 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
           ],
         ),
         actions: [
-          // Guest / Profile badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.4)),
+          // Guest mode indicator button (outlined, subtle)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFF334155)),
+              foregroundColor: const Color(0xFF94A3B8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.person_outline, size: 16, color: Color(0xFF8B5CF6)),
-                const SizedBox(width: 6),
-                Text(studentName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-              ],
+            icon: const Icon(Icons.person_outline, size: 16),
+            label: Text(
+              studentName,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Color(0xFF94A3B8)),
-            onPressed: _openSettingsDialog,
-            tooltip: 'Configure Cloud API',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Color(0xFF1E293B),
+                  content: Text('👤 Browsing as Guest — results visible without an account'),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 8),
+          // Login / Sign In button (filled, prominent)
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            icon: const Icon(Icons.login, size: 16),
+            label: const Text(
+              'Login',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Color(0xFF8B5CF6),
+                  content: Text('🔐 Login / Sign-up coming soon — track your progress & save questions!'),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 12),
         ],
       ),
       body: SingleChildScrollView(
@@ -1194,6 +1247,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     .print-btn { background: #8b5cf6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; float: right; }
     .papers-list a { display: inline-block; background: #10b981; color: white; padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 13px; margin: 4px; }
     @media print { .print-btn { display: none; } body { background: white; padding: 0; } .card { box-shadow: none; border-color: #cbd5e1; page-break-inside: avoid; } }
+    .math-block { background: #f8f0ff; border-left: 3px solid #8b5cf6; padding: 8px 14px; border-radius: 0 8px 8px 0; margin: 8px 0; font-family: 'Cambria Math', serif; color: #3b0764; }
+    code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+    ul { margin: 6px 0; padding-left: 22px; }
+    ul li { margin-bottom: 4px; }
+    hr { border: none; border-top: 1px solid #e2e8f0; margin: 12px 0; }
   </style>
   <!-- MathJax Configuration for Chemistry & Math formulas -->
   <script>
@@ -1284,97 +1342,121 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     );
   }
 
+  /// Converts Markdown text to clean HTML — for downloaded booklet.
+  /// Critical: process #### before ### before ## to avoid partial matches.
   String _formatMarkdownToHtml(String md) {
     if (md.isEmpty) return '<p>No solution provided.</p>';
 
-    var html = md;
-    html = html.replaceAllMapped(RegExp(r'^### (.+)$', multiLine: true), (m) => '<h3>${m[1]}</h3>');
-    html = html.replaceAllMapped(RegExp(r'^#### (.+)$', multiLine: true), (m) => '<h4>${m[1]}</h4>');
-    html = html.replaceAllMapped(RegExp(r'^## (.+)$', multiLine: true), (m) => '<h2>${m[1]}</h2>');
-    html = html.replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => '<strong>${m[1]}</strong>');
-    html = html.replaceAllMapped(RegExp(r'^[*-] (.+)$', multiLine: true), (m) => '<li>${m[1]}</li>');
-    html = html.replaceAllMapped(RegExp(r'^\d+\.\s+(.+)$', multiLine: true), (m) => '<li style="list-style-type: decimal;">${m[1]}</li>');
+    final lines = md.split('\n');
+    final out = StringBuffer();
+    bool inList = false;
 
-    final lines = html.split('\n');
-    final processed = <String>[];
-    for (final line in lines) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
-      if (trimmed.startsWith('<h') || trimmed.startsWith('<li') || trimmed.startsWith(r'$$')) {
-        processed.add(trimmed);
-      } else {
-        processed.add('<p>$trimmed</p>');
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        continue;
+      }
+
+      // ---- Headings (#### must come before ### before ##) ----
+      if (line.startsWith('#### ')) {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        out.writeln('<h4>${_inlineMarkdown(line.substring(5))}</h4>');
+      } else if (line.startsWith('### ')) {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        out.writeln('<h3>${_inlineMarkdown(line.substring(4))}</h3>');
+      } else if (line.startsWith('## ')) {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        out.writeln('<h2>${_inlineMarkdown(line.substring(3))}</h2>');
+      } else if (line.startsWith('# ')) {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        out.writeln('<h2>${_inlineMarkdown(line.substring(2))}</h2>');
+      }
+      // ---- Bullet lists ----
+      else if (line.startsWith('* ') || line.startsWith('- ')) {
+        if (!inList) { out.writeln('<ul>'); inList = true; }
+        out.writeln('<li>${_inlineMarkdown(line.substring(2))}</li>');
+      }
+      // ---- Numbered lists ----
+      else if (RegExp(r'^\d+\.\s').hasMatch(line)) {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        final content = line.replaceFirst(RegExp(r'^\d+\.\s+'), '');
+        out.writeln('<li style="list-style-type:decimal;margin-left:18px">${_inlineMarkdown(content)}</li>');
+      }
+      // ---- Display math block: $$ ... $$ ----
+      else if (line.startsWith(r'$$') && line.endsWith(r'$$') && line.length > 4) {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        out.writeln('<div class="math-block">${_escapeHtml(line)}</div>');
+      }
+      // ---- Horizontal rule ----
+      else if (line == '---' || line == '***') {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        out.writeln('<hr>');
+      }
+      // ---- Normal paragraph ----
+      else {
+        if (inList) { out.writeln('</ul>'); inList = false; }
+        out.writeln('<p>${_inlineMarkdown(line)}</p>');
       }
     }
-    return processed.join('\n');
+    if (inList) out.writeln('</ul>');
+    return out.toString();
   }
 
+  /// Converts inline Markdown (bold, inline code, inline math $...$) to HTML.
+  String _inlineMarkdown(String text) {
+    var t = _escapeHtml(text);
+    // Inline code `...`
+    t = t.replaceAllMapped(RegExp(r'`([^`]+)`'), (m) => '<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:13px">${m[1]}</code>');
+    // Bold **...**
+    t = t.replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => '<strong>${m[1]}</strong>');
+    // Italic *...*
+    t = t.replaceAllMapped(RegExp(r'\*(.+?)\*'), (m) => '<em>${m[1]}</em>');
+    return t;
+  }
+
+  /// Renders Markdown solution in-app as Flutter widgets, line by line.
   Widget _buildFormattedSolutionWidget(String raw) {
     final lines = raw.split('\n');
     final widgets = <Widget>[];
 
-    for (final line in lines) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) { widgets.add(const SizedBox(height: 4)); continue; }
 
-      if (trimmed.startsWith('### ')) {
-        widgets.add(Padding(
-          padding: const EdgeInsets.only(top: 10, bottom: 4),
-          child: Text(
-            trimmed.replaceFirst('### ', ''),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFC084FC)),
-          ),
+      // ---- Headings ----
+      if (line.startsWith('#### ')) {
+        widgets.add(_solHeading(line.substring(5), const Color(0xFF38BDF8), 13));
+      } else if (line.startsWith('### ')) {
+        widgets.add(_solHeading(line.substring(4), const Color(0xFFC084FC), 14));
+      } else if (line.startsWith('## ') || line.startsWith('# ')) {
+        final text = line.startsWith('## ') ? line.substring(3) : line.substring(2);
+        widgets.add(_solHeading(text, Colors.white, 15));
+      }
+      // ---- Display math $$...$$ ----
+      else if (line.startsWith(r'$$') && line.endsWith(r'$$') && line.length > 4) {
+        final formula = line.substring(2, line.length - 2).trim();
+        widgets.add(_solMathBlock(formula));
+      }
+      // ---- Bullet ----
+      else if (line.startsWith('* ') || line.startsWith('- ')) {
+        widgets.add(_solBullet(_stripInlineMarkdown(line.substring(2))));
+      }
+      // ---- Numbered list ----
+      else if (RegExp(r'^\d+\.\s').hasMatch(line)) {
+        final content = line.replaceFirst(RegExp(r'^\d+\.\s+'), '');
+        widgets.add(_solBullet(_stripInlineMarkdown(content)));
+      }
+      // ---- Horizontal rule ---
+      else if (line == '---') {
+        widgets.add(const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Divider(color: Color(0xFF334155), height: 1),
         ));
-      } else if (trimmed.startsWith('#### ')) {
-        widgets.add(Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 2),
-          child: Text(
-            trimmed.replaceFirst('#### ', ''),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF38BDF8)),
-          ),
-        ));
-      } else if (trimmed.startsWith(r'$$') && trimmed.endsWith(r'$$')) {
-        final formula = trimmed.replaceAll(r'$$', '').trim();
-        widgets.add(Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFF334155)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.functions, size: 16, color: Color(0xFFF59E0B)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SelectableText(
-                  formula,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: Color(0xFFFDE68A)),
-                ),
-              ),
-            ],
-          ),
-        ));
-      } else if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
-        final cleanBullet = _stripMarkdownChars(trimmed.substring(2));
-        widgets.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('• ', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 14, fontWeight: FontWeight.bold)),
-              Expanded(
-                child: SelectableText(
-                  cleanBullet,
-                  style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFFCBD5E1)),
-                ),
-              ),
-            ],
-          ),
-        ));
-      } else {
-        final cleanText = _stripMarkdownChars(trimmed);
+      }
+      // ---- Normal paragraph ----
+      else {
+        final cleanText = _stripInlineMarkdown(line);
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: SelectableText(
@@ -1388,8 +1470,57 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: widgets);
   }
 
-  String _stripMarkdownChars(String text) {
-    return text.replaceAll(r'**', '').replaceAll(r'__', '').replaceAll(r'###', '').replaceAll(r'####', '');
+  Widget _solHeading(String text, Color color, double size) => Padding(
+    padding: const EdgeInsets.only(top: 10, bottom: 3),
+    child: Text(
+      _stripInlineMarkdown(text),
+      style: TextStyle(fontWeight: FontWeight.bold, fontSize: size, color: color),
+    ),
+  );
+
+  Widget _solMathBlock(String formula) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFF0F172A),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0xFF334155)),
+    ),
+    child: Row(children: [
+      const Icon(Icons.functions, size: 16, color: Color(0xFFF59E0B)),
+      const SizedBox(width: 8),
+      Expanded(child: SelectableText(
+        formula,
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: Color(0xFFFDE68A)),
+      )),
+    ]),
+  );
+
+  Widget _solBullet(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('• ', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 14, fontWeight: FontWeight.bold)),
+      Expanded(child: SelectableText(
+        text,
+        style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFFCBD5E1)),
+      )),
+    ]),
+  );
+
+  /// Strips all Markdown syntax for plain-text Flutter widgets.
+  String _stripInlineMarkdown(String text) {
+    return text
+        .replaceAll(RegExp(r'\*\*(.+?)\*\*'), r'$1')
+        .replaceAll('**', '')
+        .replaceAll(RegExp(r'\*(.+?)\*'), r'$1')
+        .replaceAll('*', '')
+        .replaceAll('__', '')
+        .replaceAll(RegExp(r'`([^`]+)`'), r'$1')
+        .replaceAll(r'####', '')
+        .replaceAll(r'###', '')
+        .replaceAll(r'##', '')
+        .replaceAll(r'#', '')
+        .trim();
   }
 
   String _escapeHtml(String text) {
