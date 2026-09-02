@@ -39,3 +39,7 @@ papers_repository/*
 .pub/
 build/
 flutter_app/build/
+
+# Supabase
+serverless/supabase/.temp/
+
