@@ -857,6 +857,89 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
   Widget _buildResultsSection(bool isDesktop) {
     return Column(
       children: [
+        // Download Full Exam Kit Banner (Folder / Bundle)
+        if (questionClusters.isNotEmpty || sourcePapers.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E1B4B), Color(0xFF131B2E)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
+            ),
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                final isNarrow = constraints.maxWidth < 650;
+                return isNarrow
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.folder_special, color: Color(0xFFF59E0B), size: 24),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Complete Exam Kit (${selectedSubjectName ?? "Subject"} ${DateTime.now().year - selectedYears + 1}–${DateTime.now().year})',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.download_for_offline, size: 18),
+                            label: const Text('Download All Papers & Booklet', style: TextStyle(fontWeight: FontWeight.bold)),
+                            onPressed: _downloadFullExamKit,
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          const Icon(Icons.folder_special, color: Color(0xFFF59E0B), size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Complete Exam Kit: ${selectedSubjectName ?? "Subject"} (${DateTime.now().year - selectedYears + 1}–${DateTime.now().year})',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'Download all 50 recurring questions, LaTeX solutions & paper references in a single offline package.',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.download_for_offline, size: 18),
+                            label: const Text('Download All Papers & Booklet', style: TextStyle(fontWeight: FontWeight.bold)),
+                            onPressed: _downloadFullExamKit,
+                          ),
+                        ],
+                      );
+              },
+            ),
+          ),
+
         // Tabs Header
         Container(
           decoration: BoxDecoration(
@@ -1018,7 +1101,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     final year = paper['year'] ?? 2024;
     final examType = paper['exam_type'] ?? 'Annual Public Exam';
     final fileSize = paper['file_size'] ?? '1.6 MB';
-    final paperUrl = paper['paper_url'] ?? '';
+    final paperUrl = (paper['paper_url'] ?? '').toString();
+    final isDirectPdf = paperUrl.toLowerCase().contains('.pdf');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1027,39 +1111,182 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xFFEF4444).withOpacity(0.2),
+            color: (isDirectPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4)).withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.picture_as_pdf, color: Color(0xFFEF4444), size: 24),
+          child: Icon(
+            isDirectPdf ? Icons.picture_as_pdf : Icons.language,
+            color: isDirectPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4),
+            size: 24,
+          ),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        subtitle: Text('$year • $examType • $fileSize', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+        subtitle: Text(
+          isDirectPdf
+              ? '$year • $examType • $fileSize (Direct PDF)'
+              : '$year • Official Portal • Web Archive Paper',
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+        ),
         trailing: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF10B981),
+            backgroundColor: isDirectPdf ? const Color(0xFF10B981) : const Color(0xFF0284C7),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          icon: const Icon(Icons.file_download_outlined, size: 16),
-          label: const Text('Download PDF'),
+          icon: Icon(isDirectPdf ? Icons.file_download_outlined : Icons.open_in_new, size: 16),
+          label: Text(isDirectPdf ? 'Download PDF' : 'Open Portal Page'),
           onPressed: () {
-            if (paperUrl.toString().isNotEmpty) {
-              _openOrDownloadUrl(paperUrl.toString(), '$title.pdf');
+            if (paperUrl.isNotEmpty) {
+              _openOrDownloadUrl(paperUrl, '$title.pdf');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  backgroundColor: const Color(0xFF10B981),
-                  content: Text('Opening & downloading $title...'),
+                  backgroundColor: isDirectPdf ? const Color(0xFF10B981) : const Color(0xFF0284C7),
+                  content: Text(isDirectPdf ? 'Opening & downloading $title...' : 'Opening $title portal page...'),
                 ),
               );
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('PDF link not available for this paper.')),
+                const SnackBar(content: Text('Link not available for this paper.')),
               );
             }
           },
         ),
       ),
     );
+  }
+
+  void _downloadFullExamKit() {
+    if (questionClusters.isEmpty && sourcePapers.isEmpty) return;
+
+    final currentYear = DateTime.now().year;
+    final fromYear = currentYear - selectedYears + 1;
+    String standardName = 'Board';
+    try {
+      final std = standards.firstWhere((s) => s['id'] == selectedStandardId);
+      standardName = std['name'] ?? 'Board';
+    } catch (_) {}
+
+    final subName = selectedSubjectName ?? 'Exam_Subject';
+    final safeFileName = '${standardName}_${subName}_Papers_${fromYear}-${currentYear}'
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+
+    final buffer = StringBuffer();
+    buffer.writeln('''<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$standardName - $subName Papers ($fromYear-$currentYear)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background: #f8fafc; padding: 24px; max-width: 900px; margin: 0 auto; }
+    .header { background: #1e1b4b; color: white; padding: 24px; border-radius: 16px; margin-bottom: 24px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: bold; margin-right: 6px; }
+    .badge-amber { background: #fef3c7; color: #92400e; }
+    .badge-cyan { background: #cffafe; color: #155e75; }
+    .badge-green { background: #d1fae5; color: #065f46; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .question-title { font-size: 16px; font-weight: 600; color: #0f172a; margin-bottom: 8px; }
+    .solution-box { background: #f1f5f9; border-left: 4px solid #8b5cf6; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-top: 12px; font-size: 14px; white-space: pre-wrap; font-family: inherit; }
+    .print-btn { background: #8b5cf6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; float: right; }
+    .papers-list a { display: inline-block; background: #10b981; color: white; padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 13px; margin: 4px; }
+    @media print { .print-btn { display: none; } body { background: white; padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <button class="print-btn" onclick="window.print()">🖨️ Save as PDF / Print Booklet</button>
+    <h1 style="margin:0 0 8px 0; font-size: 24px;">$standardName — $subName</h1>
+    <p style="margin:0; opacity: 0.9;">Official Board Exam Analysis & Question Papers Booklet ($fromYear–$currentYear)</p>
+    <div style="margin-top: 12px;">
+      <span class="badge badge-amber">🔥 ${questionClusters.length} Recurring Questions</span>
+      <span class="badge badge-cyan">📥 ${sourcePapers.length} Papers & References</span>
+    </div>
+  </div>
+
+  <h2>📑 Top Recurring Questions & Model Solutions</h2>
+''');
+
+    for (int i = 0; i < questionClusters.length; i++) {
+      final q = questionClusters[i];
+      final text = q['canonical_text'] ?? '';
+      final freq = q['frequency_count'] ?? 1;
+      final years = (q['years_appeared'] as List<dynamic>?)?.join(', ') ?? '';
+      final marks = q['marks_hint'] ?? '4 Marks';
+      final qType = q['question_type'] ?? 'Theory';
+      final sol = q['solution_markdown'] ?? 'Model solution provided in app.';
+
+      buffer.writeln('''
+  <div class="card">
+    <div style="margin-bottom: 8px;">
+      <span class="badge badge-amber">#${i + 1} • Repeated ${freq}x</span>
+      <span class="badge badge-cyan">$marks</span>
+      <span class="badge badge-green">$qType</span>
+      <span style="font-size: 12px; color: #64748b;">Years: $years</span>
+    </div>
+    <div class="question-title">${_escapeHtml(text)}</div>
+    <div class="solution-box"><strong>📖 Step-by-Step Model Solution:</strong>\n${_escapeHtml(sol)}</div>
+  </div>
+''');
+    }
+
+    if (sourcePapers.isNotEmpty) {
+      buffer.writeln('''
+  <h2 style="margin-top: 32px;">📥 Question Papers & Official Source Archives</h2>
+  <div class="card papers-list">
+''');
+      for (final p in sourcePapers) {
+        final pTitle = p['title'] ?? 'Board Exam Paper';
+        final pYear = p['year'] ?? currentYear;
+        final pUrl = p['paper_url'] ?? '#';
+        final pSize = p['file_size'] ?? '1.6 MB';
+        buffer.writeln('''
+    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;">
+      <strong>$pTitle ($pYear)</strong> — $pSize<br>
+      <a href="$pUrl" target="_blank" rel="noopener noreferrer">📄 Open / Download Paper</a>
+    </div>
+''');
+      }
+      buffer.writeln('  </div>');
+    }
+
+    buffer.writeln('''
+</body>
+</html>''');
+
+    _triggerHtmlDownload(buffer.toString(), '$safeFileName.html');
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF10B981),
+        content: Text('Downloaded Exam Kit: $safeFileName.html (Open to view or Save as PDF)!'),
+      ),
+    );
+  }
+
+  String _escapeHtml(String text) {
+    return text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
+  }
+
+  void _triggerHtmlDownload(String content, String filename) {
+    try {
+      final base64Content = base64Encode(utf8.encode(content));
+      js.context.callMethod('eval', ["""
+        (function(b64, name) {
+          var a = document.createElement('a');
+          a.href = 'data:text/html;charset=utf-8;base64,' + b64;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        })('$base64Content', '$filename')
+      """]);
+    } catch (_) {
+      _openOrDownloadUrl('data:text/html;charset=utf-8;base64,' + base64Encode(utf8.encode(content)), filename);
+    }
   }
 
   void _openOrDownloadUrl(String url, String filename) {
