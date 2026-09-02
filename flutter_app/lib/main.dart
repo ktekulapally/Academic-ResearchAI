@@ -92,6 +92,79 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
   List<dynamic> questionClusters = [];
   List<dynamic> sourcePapers = [];
   bool isLoadingResults = false;
+  String? activeFilter;
+
+  List<dynamic> get filteredQuestionClusters {
+    if (activeFilter == null || activeFilter!.trim().isEmpty) {
+      return questionClusters;
+    }
+    final filter = activeFilter!.toLowerCase();
+
+    final wants10Marks = filter.contains('10 mark') || filter.contains('10mark') || filter.contains('8 mark') || filter.contains('8mark') || filter.contains('laq') || filter.contains('long answer');
+    final wants4Marks = filter.contains('4 mark') || filter.contains('4mark') || filter.contains('saq') || filter.contains('short answer');
+    final wants2Marks = filter.contains('2 mark') || filter.contains('2mark') || filter.contains('vsaq') || filter.contains('very short');
+    final wantsDerivation = filter.contains('derivation') || filter.contains('derive');
+    final wantsNumerical = filter.contains('numerical') || filter.contains('problem');
+
+    int? maxAgeYears;
+    if (filter.contains('3 year') || filter.contains('since 3') || filter.contains('last 3')) {
+      maxAgeYears = 3;
+    } else if (filter.contains('5 year') || filter.contains('since 5') || filter.contains('last 5')) {
+      maxAgeYears = 5;
+    }
+
+    final currentYear = DateTime.now().year;
+    final minYearThreshold = maxAgeYears != null ? currentYear - maxAgeYears + 1 : null;
+
+    final results = questionClusters.where((item) {
+      final text = (item['canonical_text'] ?? '').toString().toLowerCase();
+      final marks = (item['marks_hint'] ?? '').toString().toLowerCase();
+      final qType = (item['question_type'] ?? '').toString().toLowerCase();
+      final years = List<int>.from(item['years_appeared'] ?? []);
+
+      if (wants10Marks && !(marks.contains('10') || marks.contains('8') || marks.contains('long') || qType.contains('derivation'))) {
+        return false;
+      }
+      if (wants4Marks && !(marks.contains('4') || marks.contains('5') || marks.contains('short'))) {
+        return false;
+      }
+      if (wants2Marks && !(marks.contains('2') || marks.contains('very short') || marks.contains('1'))) {
+        return false;
+      }
+      if (wantsDerivation && !qType.contains('derivation') && !text.contains('derive') && !text.contains('derivation')) {
+        return false;
+      }
+      if (wantsNumerical && !qType.contains('numerical') && !text.contains('calculate') && !text.contains('find')) {
+        return false;
+      }
+
+      if (minYearThreshold != null && years.isNotEmpty) {
+        final matchesYear = years.any((y) => y >= minYearThreshold);
+        if (!matchesYear) return false;
+      }
+
+      return true;
+    }).toList();
+
+    if (results.isNotEmpty) return results;
+
+    final keywords = filter
+        .split(' ')
+        .map((w) => w.replaceAll(RegExp(r'[^a-zA-Z0-9]'), ''))
+        .where((w) => w.length > 2 && !['perform', 'more', 'research', 'list', 'only', 'questions', 'answers', 'papers', 'since', 'year', 'years', 'inter', 'physics', 'chemistry', 'maths'].contains(w))
+        .toList();
+
+    if (keywords.isEmpty) return questionClusters;
+
+    final kwResults = questionClusters.where((item) {
+      final text = (item['canonical_text'] ?? '').toString().toLowerCase();
+      final solution = (item['solution_markdown'] ?? '').toString().toLowerCase();
+      final tags = (item['concept_tags'] as List<dynamic>?)?.join(' ').toLowerCase() ?? '';
+      return keywords.any((kw) => text.contains(kw) || tags.contains(kw) || solution.contains(kw));
+    }).toList();
+
+    return kwResults.isNotEmpty ? kwResults : questionClusters;
+  }
 
   @override
   void initState() {
@@ -142,6 +215,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       subjects = [];
       questionClusters = [];
       sourcePapers = [];
+      activeFilter = null;
     });
 
     try {
@@ -153,10 +227,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
         final data = jsonDecode(res.body) as List<dynamic>;
         setState(() {
           streams = data;
-          if (streams.isNotEmpty) {
-            _selectStream(streams.first['id']);
-          }
         });
+        if (streams.isNotEmpty) {
+          await _selectStream(streams.first['id']);
+        }
       }
     } catch (_) {}
   }
@@ -169,6 +243,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
       subjects = [];
       questionClusters = [];
       sourcePapers = [];
+      activeFilter = null;
     });
 
     try {
@@ -192,6 +267,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     setState(() {
       selectedSubjectId = subjectId;
       selectedSubjectName = name;
+      activeFilter = null;
     });
     _fetchTopQuestionsAndPapers(subjectId);
   }
@@ -221,78 +297,125 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
     }
   }
 
-  // Smart client-side NLP query parser — works offline, no extra edge function needed
+  // Smart client-side NLP query parser — handles both instant filtering & deep re-research
   Future<void> _handleNLPQuery(String query) async {
-    if (query.trim().isEmpty) return;
+    final raw = query.trim();
+    if (raw.isEmpty) return;
     setState(() => isSearchingNLP = true);
 
-    final q = query.toLowerCase();
+    final q = raw.toLowerCase();
 
-    // ---- Detect years horizon ----
-    if (q.contains('10 year') || q.contains('10year') || q.contains('last 10')) {
-      setState(() => selectedYears = 10);
-    } else if (q.contains('7 year') || q.contains('7year') || q.contains('last 7')) {
-      setState(() => selectedYears = 7);
+    // 1. Detect and set analysis horizon
+    if (q.contains('3 year') || q.contains('3year') || q.contains('last 3') || q.contains('since 3')) {
+      setState(() => selectedYears = 5); // 5-year analysis horizon, prompt specifies 3 years
     } else if (q.contains('5 year') || q.contains('5year') || q.contains('last 5')) {
       setState(() => selectedYears = 5);
+    } else if (q.contains('7 year') || q.contains('7year') || q.contains('last 7')) {
+      setState(() => selectedYears = 7);
+    } else if (q.contains('10 year') || q.contains('10year') || q.contains('last 10')) {
+      setState(() => selectedYears = 10);
     }
 
-    // ---- Detect board/standard by keyword ----
-    int? matchedStdId;
-    for (final s in standards) {
-      final name = (s['name'] as String).toLowerCase();
-      if (q.contains(name) || name.split(' ').any((w) => w.length > 3 && q.contains(w))) {
-        matchedStdId = s['id'];
-        break;
+    // 2. Accurate Board / Standard Detection (Prevent '1st' matching '2nd')
+    dynamic targetStd;
+    if (q.contains('2nd year') || q.contains('second year') || q.contains('senior') || q.contains('inter 2') || q.contains('inter ii')) {
+      targetStd = standards.firstWhere((s) => (s['name'] as String).toLowerCase().contains('2nd') || (s['name'] as String).toLowerCase().contains('senior'), orElse: () => null);
+    } else if (q.contains('1st year') || q.contains('first year') || q.contains('junior') || q.contains('inter 1') || q.contains('inter i')) {
+      targetStd = standards.firstWhere((s) => (s['name'] as String).toLowerCase().contains('1st') || (s['name'] as String).toLowerCase().contains('junior'), orElse: () => null);
+    } else if (q.contains('12th') || q.contains('class 12')) {
+      targetStd = standards.firstWhere((s) => (s['name'] as String).toLowerCase().contains('class 12'), orElse: () => null);
+    } else if (q.contains('11th') || q.contains('class 11')) {
+      targetStd = standards.firstWhere((s) => (s['name'] as String).toLowerCase().contains('class 11'), orElse: () => null);
+    } else if (q.contains('10th') || q.contains('class 10')) {
+      targetStd = standards.firstWhere((s) => (s['name'] as String).toLowerCase().contains('class 10'), orElse: () => null);
+    }
+
+    if (targetStd != null && targetStd['id'] != selectedStandardId) {
+      await _selectStandard(targetStd['id']);
+    }
+
+    // 3. Stream auto-selection (e.g. MPC vs BiPC vs Science)
+    if (q.contains('mpc') || q.contains('math') || (q.contains('physics') && selectedStreamId == null)) {
+      final mpc = streams.firstWhere((st) => (st['name'] as String).toUpperCase() == 'MPC' || (st['name'] as String).toLowerCase().contains('science'), orElse: () => null);
+      if (mpc != null && mpc['id'] != selectedStreamId) {
+        await _selectStream(mpc['id']);
+      }
+    } else if (q.contains('bipc') || q.contains('biology') || q.contains('botany') || q.contains('zoology')) {
+      final bipc = streams.firstWhere((st) => (st['name'] as String).toUpperCase() == 'BIPC', orElse: () => null);
+      if (bipc != null && bipc['id'] != selectedStreamId) {
+        await _selectStream(bipc['id']);
       }
     }
 
-    if (matchedStdId != null && matchedStdId != selectedStandardId) {
-      await _selectStandard(matchedStdId);
-    }
+    // 4. Accurate Subject Detection
+    final stdName = selectedStandardId != null
+        ? (standards.firstWhere((s) => s['id'] == selectedStandardId, orElse: () => {})['name']?.toString().toLowerCase() ?? '')
+        : '';
+    final isSecondYear = stdName.contains('2nd') || stdName.contains('senior');
 
-    // ---- Detect subject by keyword in current subjects list ----
-    int? matchedSubId;
-    String? matchedSubName;
-    for (final sub in subjects) {
-      final name = (sub['name'] as String).toLowerCase();
-      if (q.contains(name) || name.split(' ').any((w) => w.length > 3 && q.contains(w))) {
-        matchedSubId = sub['id'];
-        matchedSubName = sub['name'];
-        break;
+    dynamic targetSub;
+    if (q.contains('physics')) {
+      final nameToFind = isSecondYear ? 'physics 2' : 'physics';
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains(nameToFind), orElse: () => subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('physics'), orElse: () => null));
+    } else if (q.contains('chemistry')) {
+      final nameToFind = isSecondYear ? 'chemistry 2' : 'chemistry';
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains(nameToFind), orElse: () => subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('chemistry'), orElse: () => null));
+    } else if (q.contains('botany')) {
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('botany'), orElse: () => null);
+    } else if (q.contains('zoology')) {
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('zoology'), orElse: () => null);
+    } else if (q.contains('english')) {
+      targetSub = subjects.firstWhere((sub) => (sub['name'] as String).toLowerCase().contains('english'), orElse: () => null);
+    } else {
+      for (final sub in subjects) {
+        final sName = (sub['name'] as String).toLowerCase();
+        if (q.contains(sName)) {
+          targetSub = sub;
+          break;
+        }
       }
     }
 
-    if (matchedSubId != null) {
-      _selectSubject(matchedSubId, matchedSubName!);
-      setState(() => isSearchingNLP = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF8B5CF6),
-          content: Text('✅ Showing results for "$matchedSubName" · ${selectedYears} year analysis'),
-        ),
-      );
-      return;
+    if (targetSub != null && targetSub['id'] != selectedSubjectId) {
+      _selectSubject(targetSub['id'], targetSub['name']);
     }
 
-    // ---- If subject not matched yet, auto-trigger deep research with the query as prompt ----
-    if (selectedSubjectId != null) {
-      setState(() => isSearchingNLP = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF8B5CF6),
-          content: Text('🔬 Launching deep research with your query…'),
-        ),
-      );
-      _startDeepResearch();
-      return;
+    // 5. Determine whether to Trigger Deep Research OR Filter In-Memory
+    final wantsDeepResearch = q.contains('research') || q.contains('perform') || q.contains('more') || q.contains('dig') || q.contains('generate') || questionClusters.isEmpty;
+
+    if (wantsDeepResearch) {
+      setState(() {
+        isSearchingNLP = false;
+        activeFilter = null;
+      });
+      if (selectedSubjectId != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF8B5CF6),
+            content: Text('🔬 Launching targeted Deep Research for $selectedSubjectName:\n"$raw"'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        _startDeepResearch();
+        return;
+      }
     }
 
-    setState(() => isSearchingNLP = false);
+    // Instant in-memory filter of current questions
+    setState(() {
+      activeFilter = raw;
+      isSearchingNLP = false;
+    });
+
+    final matchCount = filteredQuestionClusters.length;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Color(0xFFF59E0B),
-        content: Text('👆 Please select a Board & Subject first, then use AI search to refine results.'),
+      SnackBar(
+        backgroundColor: matchCount > 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+        content: Text(
+          matchCount > 0
+              ? '🎯 Filtered question bank: showing $matchCount matching question${matchCount == 1 ? "" : "s"}.'
+              : 'No matching questions in current 50 questions. Click "Deep Research This" to harvest from cloud.',
+        ),
       ),
     );
   }
@@ -1198,7 +1321,12 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
             labelColor: const Color(0xFF8B5CF6),
             unselectedLabelColor: const Color(0xFF94A3B8),
             tabs: [
-              Tab(icon: const Icon(Icons.auto_stories, size: 18), text: 'Top Recurring Questions (${questionClusters.length})'),
+              Tab(
+                icon: const Icon(Icons.auto_stories, size: 18),
+                text: activeFilter != null
+                    ? 'Questions (${filteredQuestionClusters.length}/${questionClusters.length})'
+                    : 'Top Recurring Questions (${questionClusters.length})',
+              ),
               Tab(icon: const Icon(Icons.travel_explore, size: 18), text: 'Research Sources (${sourcePapers.length})'),
             ],
           ),
@@ -1213,14 +1341,70 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with SingleTicker
                 animation: _tabController,
                 builder: (ctx, _) {
                   if (_tabController.index == 0) {
-                    // ── Tab 1: Question Bank ───────────────────────
+                    // ── Tab 1: Question Bank (with active filter support) ──
                     if (questionClusters.isEmpty) {
                       return _buildEmptyState('No recurring questions yet. Click "Start Deep Research" above!');
                     }
+                    final displayList = filteredQuestionClusters;
                     return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        for (int i = 0; i < questionClusters.length; i++)
-                          _buildQuestionClusterCard(questionClusters[i], i + 1),
+                        if (activeFilter != null && activeFilter!.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E1B4B),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF8B5CF6)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.filter_alt, size: 18, color: Color(0xFF8B5CF6)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Active Filter: "$activeFilter"',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Showing ${displayList.length} matching question${displayList.length == 1 ? "" : "s"} from current ${questionClusters.length} questions.',
+                                        style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () => setState(() => activeFilter = null),
+                                  child: const Text('Show All', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12)),
+                                ),
+                                const SizedBox(width: 6),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF8B5CF6),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  icon: const Icon(Icons.rocket_launch, size: 14),
+                                  label: const Text('Deep Research Cloud', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  onPressed: () {
+                                    _queryController.text = activeFilter!;
+                                    _startDeepResearch();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (displayList.isEmpty)
+                          _buildEmptyState('No questions match "$activeFilter".\nClick "Deep Research Cloud" above to generate dedicated questions for this prompt!')
+                        else
+                          for (int i = 0; i < displayList.length; i++)
+                            _buildQuestionClusterCard(displayList[i], i + 1),
                       ],
                     );
                   } else {
