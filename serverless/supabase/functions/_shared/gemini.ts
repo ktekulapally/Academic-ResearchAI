@@ -36,20 +36,19 @@ export async function geminiJson(
     console.warn(`Failed to query models list: ${e}`);
   }
 
-  // Stable production models prioritized first
+  // Stable active production models prioritized as suggested by Google API
   const fallbackModels = [
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
+    "gemini-3.6-flash",
+    "gemini-flash-lite-latest",
     "gemini-flash-latest",
-    "gemini-2.0-flash",
     "gemini-2.0-flash-exp",
-    "gemini-1.5-pro",
+    "gemini-1.5-flash",
   ];
 
-  // Candidates: available standard flash models first, then fallbacks
+  // Candidates: discovered flash/lite models FIRST, then fallback models
   const candidates = Array.from(
     new Set([
-      ...availableModels.filter((m) => m === "gemini-1.5-flash" || m === "gemini-1.5-flash-latest" || m === "gemini-2.0-flash"),
+      ...availableModels.filter((m) => m.includes("3.6") || m.includes("lite") || m.includes("flash")),
       ...fallbackModels,
       ...availableModels,
     ])
@@ -57,21 +56,34 @@ export async function geminiJson(
 
   let allDiagnostics: string[] = [];
 
-  for (const m of candidates.slice(0, 6)) {
+  for (const m of candidates.slice(0, 7)) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
+      const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.2,
+          maxOutputTokens: 8192,
+        },
+      };
+
+      let res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.2,
-            maxOutputTokens: 8192,
-          },
-        }),
+        body: JSON.stringify(payload),
       });
+
+      // Handle temporary demand spikes (HTTP 503) with a quick 2-second retry
+      if (res.status === 503) {
+        console.warn(`Model ${m} busy (503), retrying in 2 seconds…`);
+        await new Promise((r) => setTimeout(r, 2000));
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (!res.ok) {
         const errText = await res.text();
